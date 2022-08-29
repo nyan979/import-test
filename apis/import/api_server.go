@@ -1,79 +1,72 @@
 package main
 
 import (
-	"context"
-	"encoding/csv"
-	"io"
-	"log"
-	"net/http"
-	"os"
-
-	"github.com/hasura/go-graphql-client"
+	"mssfoobar/ar2-import/lib/test"
 )
 
 func main() {
-	//gqlClient := test.TestImportWorkflow()
+	var gqlClient test.Activities
 
-	// gqlClient.test.ImportCsvActivity()
+	gqlClient.GraphQlClient = test.TestImportWorkflow()
 
-	client := graphql.NewClient("http://localhost:8080/v1/graphql", nil)
-	client = client.WithRequestModifier(func(req *http.Request) {
-		req.Header.Set("x-hasura-admin-secret", "newadminkey")
-	})
+	gqlClient.ImportCsvActivity("./lib/data/data.csv")
 
-	csvFile, err := os.Open("./lib/data/data.csv")
-	if err != nil {
-		log.Fatal(err)
-	}
+	// client := graphql.NewClient("http://localhost:8080/v1/graphql", nil)
+	// client = client.WithRequestModifier(func(req *http.Request) {
+	// 	req.Header.Set("x-hasura-admin-secret", "newadminkey")
+	// })
 
-	reader := csv.NewReader(csvFile)
-	if _, err := reader.Read(); err != nil {
-		log.Fatal(err)
-	}
+	// csvFile, err := os.Open("./lib/data/data.csv")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	//var csvData []CSVData
+	// reader := csv.NewReader(csvFile)
+	// if _, err := reader.Read(); err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	var variables map[string]interface{}
+	// var variables map[string]interface{}
 
-	type import_csv_insert_input struct {
-		Column1  string `json:"column_1,omitempty"`
-		Column2  string `json:"column_2,omitempty"`
-		Column3  string `json:"column_3,omitempty"`
-		Column4  string `json:"column_4,omitempty"`
-		Column5  string `json:"column_5,omitempty"`
-		Filename string `json:"filename,omitempty"`
-	}
+	// type import_csv_insert_input struct {
+	// 	Column1  string `json:"column_1,omitempty"`
+	// 	Column2  string `json:"column_2,omitempty"`
+	// 	Column3  string `json:"column_3,omitempty"`
+	// 	Column4  string `json:"column_4,omitempty"`
+	// 	Column5  string `json:"column_5,omitempty"`
+	// 	Filename string `json:"filename,omitempty"`
+	// }
 
-	var mutation struct {
-		InsertData struct {
-			Id              graphql.ID
-			UploadTimeStamp graphql.String
-		} `graphql:"insert_import_csv_one(object: $object)"`
-	}
+	// var mutation struct {
+	// 	InsertData struct {
+	// 		Id              graphql.ID
+	// 		UploadTimeStamp graphql.String
+	// 	} `graphql:"insert_import_csv_one(object: $object)"`
+	// }
 
-	for {
-		line, err := reader.Read()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			log.Fatal(err)
-		}
+	// for {
+	// 	line, err := reader.Read()
+	// 	if err == io.EOF {
+	// 		break
+	// 	} else if err != nil {
+	// 		log.Fatal(err)
+	// 	}
 
-		variables = map[string]interface{}{
-			"object": import_csv_insert_input{
-				Column1:  line[0],
-				Column2:  line[1],
-				Column3:  line[2],
-				Column4:  line[3],
-				Column5:  line[4],
-				Filename: "data.csv",
-			},
-		}
+	// 	variables = map[string]interface{}{
+	// 		"object": import_csv_insert_input{
+	// 			Column1:  line[0],
+	// 			Column2:  line[1],
+	// 			Column3:  line[2],
+	// 			Column4:  line[3],
+	// 			Column5:  line[4],
+	// 			Filename: "data.csv",
+	// 		},
+	// 	}
 
-		if err := client.Mutate(context.Background(), &mutation, variables); err != nil {
-			log.Fatal(err)
-		}
-	}
+	// 	if err := client.Mutate(context.Background(), &mutation, variables); err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }
 
 	// csvJson, _ := json.Marshal(csvData)
 	// fmt.Println(string(csvJson))

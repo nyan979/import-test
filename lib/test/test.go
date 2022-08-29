@@ -2,6 +2,8 @@ package test
 
 import (
 	"context"
+	"io"
+	"log"
 	"net/http"
 
 	"github.com/hasura/go-graphql-client"
@@ -9,17 +11,6 @@ import (
 
 type Activities struct {
 	GraphQlClient *graphql.Client
-}
-
-type csv struct {
-	Id              string `json:"id,omitempty"`
-	Column1         string `json:"column_1,omitempty"`
-	Column2         string `json:"column_2,omitempty"`
-	Column3         string `json:"column_3,omitempty"`
-	Column4         string `json:"column_4,omitempty"`
-	Column5         string `json:"column_5,omitempty"`
-	UploadTimeStamp string `json:"uploadTimeStamp,omitempty"`
-	Filename        string `json:"filename,omitempty"`
 }
 
 func TestImportWorkflow() *graphql.Client {
@@ -31,11 +22,7 @@ func TestImportWorkflow() *graphql.Client {
 	return client
 }
 
-var activities *Activities
-
-type input csv
-
-func (a *Activities) ImportCsvActivity(variables map[string]interface{}) error {
+func (a *Activities) ImportCsvActivity(filepath string) error {
 	type import_csv_insert_input struct {
 		Id              string `json:"id,omitempty"`
 		Column1         string `json:"column_1,omitempty"`
@@ -49,16 +36,36 @@ func (a *Activities) ImportCsvActivity(variables map[string]interface{}) error {
 
 	var mutation struct {
 		InsertData struct {
-			Id graphql.ID
-		} `graphql:"insert_import_csv(object: $object)"`
+			Id              graphql.ID
+			UploadTimeStamp graphql.String
+		} `graphql:"insert_import_csv_one(object: $object)"`
 	}
 
-	variables = map[string]interface{}{
-		"object": import_csv_insert_input{},
-	}
+	reader := LoadCSV(filepath)
+	var variables map[string]interface{}
 
-	if err := a.GraphQlClient.Mutate(context.Background(), &mutation, variables); err != nil {
-		return err
+	for {
+		line, err := reader.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			log.Fatal(err)
+		}
+
+		variables = map[string]interface{}{
+			"object": import_csv_insert_input{
+				Column1:  line[0],
+				Column2:  line[1],
+				Column3:  line[2],
+				Column4:  line[3],
+				Column5:  line[4],
+				Filename: "data.csv",
+			},
+		}
+
+		if err := a.GraphQlClient.Mutate(context.Background(), &mutation, variables); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	return nil

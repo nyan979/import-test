@@ -1,0 +1,189 @@
+SET check_function_bodies = false;
+CREATE SCHEMA configuration;
+CREATE SCHEMA hdb_catalog;
+CREATE SCHEMA import;
+CREATE SCHEMA "user";
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
+CREATE FUNCTION hdb_catalog.gen_hasura_uuid() RETURNS uuid
+    LANGUAGE sql
+    AS $$select gen_random_uuid()$$;
+CREATE TABLE configuration.layout (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    configuration jsonb NOT NULL
+);
+COMMENT ON TABLE configuration.layout IS 'This table stores layout configurations';
+CREATE TABLE configuration.widget (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    type text NOT NULL,
+    config jsonb NOT NULL
+);
+COMMENT ON TABLE configuration.widget IS 'This table stores data related to specific widgets and their configurations.';
+CREATE TABLE hdb_catalog.hdb_action_log (
+    id uuid DEFAULT hdb_catalog.gen_hasura_uuid() NOT NULL,
+    action_name text,
+    input_payload jsonb NOT NULL,
+    request_headers jsonb NOT NULL,
+    session_variables jsonb NOT NULL,
+    response_payload jsonb,
+    errors jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    response_received_at timestamp with time zone,
+    status text NOT NULL,
+    CONSTRAINT hdb_action_log_status_check CHECK ((status = ANY (ARRAY['created'::text, 'processing'::text, 'completed'::text, 'error'::text])))
+);
+CREATE TABLE hdb_catalog.hdb_cron_event_invocation_logs (
+    id text DEFAULT hdb_catalog.gen_hasura_uuid() NOT NULL,
+    event_id text,
+    status integer,
+    request json,
+    response json,
+    created_at timestamp with time zone DEFAULT now()
+);
+CREATE TABLE hdb_catalog.hdb_cron_events (
+    id text DEFAULT hdb_catalog.gen_hasura_uuid() NOT NULL,
+    trigger_name text NOT NULL,
+    scheduled_time timestamp with time zone NOT NULL,
+    status text DEFAULT 'scheduled'::text NOT NULL,
+    tries integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    next_retry_at timestamp with time zone,
+    CONSTRAINT valid_status CHECK ((status = ANY (ARRAY['scheduled'::text, 'locked'::text, 'delivered'::text, 'error'::text, 'dead'::text])))
+);
+CREATE TABLE hdb_catalog.hdb_metadata (
+    id integer NOT NULL,
+    metadata json NOT NULL,
+    resource_version integer DEFAULT 1 NOT NULL
+);
+CREATE TABLE hdb_catalog.hdb_scheduled_event_invocation_logs (
+    id text DEFAULT hdb_catalog.gen_hasura_uuid() NOT NULL,
+    event_id text,
+    status integer,
+    request json,
+    response json,
+    created_at timestamp with time zone DEFAULT now()
+);
+CREATE TABLE hdb_catalog.hdb_scheduled_events (
+    id text DEFAULT hdb_catalog.gen_hasura_uuid() NOT NULL,
+    webhook_conf json NOT NULL,
+    scheduled_time timestamp with time zone NOT NULL,
+    retry_conf json,
+    payload json,
+    header_conf json,
+    status text DEFAULT 'scheduled'::text NOT NULL,
+    tries integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    next_retry_at timestamp with time zone,
+    comment text,
+    CONSTRAINT valid_status CHECK ((status = ANY (ARRAY['scheduled'::text, 'locked'::text, 'delivered'::text, 'error'::text, 'dead'::text])))
+);
+CREATE TABLE hdb_catalog.hdb_schema_notifications (
+    id integer NOT NULL,
+    notification json NOT NULL,
+    resource_version integer DEFAULT 1 NOT NULL,
+    instance_id uuid NOT NULL,
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT hdb_schema_notifications_id_check CHECK ((id = 1))
+);
+CREATE TABLE hdb_catalog.hdb_version (
+    hasura_uuid uuid DEFAULT hdb_catalog.gen_hasura_uuid() NOT NULL,
+    version text NOT NULL,
+    upgraded_on timestamp with time zone NOT NULL,
+    cli_state jsonb DEFAULT '{}'::jsonb NOT NULL,
+    console_state jsonb DEFAULT '{}'::jsonb NOT NULL
+);
+CREATE TABLE import.csv (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    column_1 text NOT NULL,
+    column_2 text NOT NULL,
+    column_3 text NOT NULL,
+    column_4 text NOT NULL,
+    column_5 text NOT NULL,
+    "uploadTimeStamp" timestamp with time zone DEFAULT now() NOT NULL,
+    filename text NOT NULL
+);
+CREATE TABLE "user"."user" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    username text NOT NULL,
+    email text NOT NULL
+);
+COMMENT ON TABLE "user"."user" IS 'A user account used for access in the system.';
+COPY configuration.layout (id, name, configuration) FROM stdin;
+\.
+COPY configuration.widget (id, name, type, config) FROM stdin;
+\.
+COPY hdb_catalog.hdb_action_log (id, action_name, input_payload, request_headers, session_variables, response_payload, errors, created_at, response_received_at, status) FROM stdin;
+\.
+COPY hdb_catalog.hdb_cron_event_invocation_logs (id, event_id, status, request, response, created_at) FROM stdin;
+\.
+COPY hdb_catalog.hdb_cron_events (id, trigger_name, scheduled_time, status, tries, created_at, next_retry_at) FROM stdin;
+\.
+COPY hdb_catalog.hdb_metadata (id, metadata, resource_version) FROM stdin;
+1	{"sources":[{"configuration":{"connection_info":{"database_url":{"from_env":"HASURA_GRAPHQL_DATABASE_URL"},"isolation_level":"read-committed","pool_settings":{"connection_lifetime":600,"idle_timeout":180,"max_connections":50,"retries":1},"use_prepared_statements":true}},"kind":"postgres","name":"ar2","tables":[{"table":{"name":"layout","schema":"configuration"}},{"table":{"name":"widget","schema":"configuration"}},{"table":{"name":"csv","schema":"import"}},{"table":{"name":"user","schema":"user"}}]}],"version":3}	13
+\.
+COPY hdb_catalog.hdb_scheduled_event_invocation_logs (id, event_id, status, request, response, created_at) FROM stdin;
+\.
+COPY hdb_catalog.hdb_scheduled_events (id, webhook_conf, scheduled_time, retry_conf, payload, header_conf, status, tries, created_at, next_retry_at, comment) FROM stdin;
+\.
+COPY hdb_catalog.hdb_schema_notifications (id, notification, resource_version, instance_id, updated_at) FROM stdin;
+1	{"metadata":false,"remote_schemas":[],"sources":[]}	13	6c02a891-ea6b-41bf-99ad-497eac239959	2022-08-04 05:21:26.763836+00
+\.
+COPY hdb_catalog.hdb_version (hasura_uuid, version, upgraded_on, cli_state, console_state) FROM stdin;
+39f4a3cf-cb10-4635-a718-b973754a1d7a	47	2022-08-04 05:14:26.446978+00	{}	{"console_notifications": {"admin": {"date": "2022-08-22T01:04:15.619Z", "read": [], "showBadge": false}}, "telemetryNotificationShown": true}
+\.
+COPY import.csv (id, column_1, column_2, column_3, column_4, column_5, "uploadTimeStamp", filename) FROM stdin;
+35634697-445a-4cfe-b502-8745da3cb533	swept	numeral	made	fell	circle	2022-08-29 01:51:06.698067+00	data.csv
+b48211d4-b0d1-47b3-9b99-4932cdcb5b84	present	construction	anywhere	window	happily	2022-08-29 01:51:06.737042+00	data.csv
+558013b7-76a7-40c8-b51e-26f55befd3ce	breakfast	question	tightly	frequently	nervous	2022-08-29 01:51:06.761643+00	data.csv
+20a7669e-b7f6-4bb8-8218-63e61868a0f3	cage	boat	source	driver	western	2022-08-29 01:51:06.786291+00	data.csv
+41068150-a7d9-41c8-b883-b494f193113b	chapter	roar	afternoon	blood	those	2022-08-29 01:51:06.803161+00	data.csv
+fe220739-fc49-4dce-a65e-179003843c1a	dropped	willing	angry	upward	up	2022-08-29 01:51:06.833061+00	data.csv
+56dc3870-e873-4391-acd2-b7ac5806d052	compass	seeing	brother	compound	pet	2022-08-29 01:51:06.867086+00	data.csv
+5d0901a5-7f9a-4855-84ca-0f313bf9351d	proper	window	grade	energy	refused	2022-08-29 01:51:06.903843+00	data.csv
+978b5694-a906-4920-906a-d7b5a00a54b4	spoken	office	massage	he	frequently	2022-08-29 01:51:06.949501+00	data.csv
+0c1d386f-6c95-4cd7-a53e-1dd9ff8f3036	open	left	oldest	corner	bite	2022-08-29 01:51:07.000507+00	data.csv
+\.
+COPY "user"."user" (id, username, email) FROM stdin;
+05fa99f2-8702-4793-805e-ce2e9bfd4b07	admin	admin@ar2.com
+\.
+ALTER TABLE ONLY configuration.layout
+    ADD CONSTRAINT layout_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY configuration.widget
+    ADD CONSTRAINT widget_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY hdb_catalog.hdb_action_log
+    ADD CONSTRAINT hdb_action_log_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY hdb_catalog.hdb_cron_event_invocation_logs
+    ADD CONSTRAINT hdb_cron_event_invocation_logs_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY hdb_catalog.hdb_cron_events
+    ADD CONSTRAINT hdb_cron_events_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY hdb_catalog.hdb_metadata
+    ADD CONSTRAINT hdb_metadata_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY hdb_catalog.hdb_metadata
+    ADD CONSTRAINT hdb_metadata_resource_version_key UNIQUE (resource_version);
+ALTER TABLE ONLY hdb_catalog.hdb_scheduled_event_invocation_logs
+    ADD CONSTRAINT hdb_scheduled_event_invocation_logs_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY hdb_catalog.hdb_scheduled_events
+    ADD CONSTRAINT hdb_scheduled_events_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY hdb_catalog.hdb_schema_notifications
+    ADD CONSTRAINT hdb_schema_notifications_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY hdb_catalog.hdb_version
+    ADD CONSTRAINT hdb_version_pkey PRIMARY KEY (hasura_uuid);
+ALTER TABLE ONLY import.csv
+    ADD CONSTRAINT csv_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY "user"."user"
+    ADD CONSTRAINT user_email_key UNIQUE (email);
+ALTER TABLE ONLY "user"."user"
+    ADD CONSTRAINT user_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY "user"."user"
+    ADD CONSTRAINT user_username_key UNIQUE (username);
+CREATE INDEX hdb_cron_event_invocation_event_id ON hdb_catalog.hdb_cron_event_invocation_logs USING btree (event_id);
+CREATE INDEX hdb_cron_event_status ON hdb_catalog.hdb_cron_events USING btree (status);
+CREATE UNIQUE INDEX hdb_cron_events_unique_scheduled ON hdb_catalog.hdb_cron_events USING btree (trigger_name, scheduled_time) WHERE (status = 'scheduled'::text);
+CREATE INDEX hdb_scheduled_event_status ON hdb_catalog.hdb_scheduled_events USING btree (status);
+CREATE UNIQUE INDEX hdb_version_one_row ON hdb_catalog.hdb_version USING btree (((version IS NOT NULL)));
+ALTER TABLE ONLY hdb_catalog.hdb_cron_event_invocation_logs
+    ADD CONSTRAINT hdb_cron_event_invocation_logs_event_id_fkey FOREIGN KEY (event_id) REFERENCES hdb_catalog.hdb_cron_events(id) ON UPDATE CASCADE ON DELETE CASCADE;
+ALTER TABLE ONLY hdb_catalog.hdb_scheduled_event_invocation_logs
+    ADD CONSTRAINT hdb_scheduled_event_invocation_logs_event_id_fkey FOREIGN KEY (event_id) REFERENCES hdb_catalog.hdb_scheduled_events(id) ON UPDATE CASCADE ON DELETE CASCADE;
