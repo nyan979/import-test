@@ -1,15 +1,13 @@
 package main
 
-import (
-	"mssfoobar/ar2-import/lib/test"
-)
-
 func main() {
-	var gqlClient test.Activities
+	// var gqlClient test.Activities
 
-	gqlClient.GraphQlClient = test.TestImportWorkflow()
+	// gqlClient.GraphQlClient = test.TestImportWorkflow()
 
-	gqlClient.ImportCsvActivity("./lib/data/data.csv")
+	// gqlClient.ImportCsvActivity("./lib/data/data.csv")
+
+	SetupRoutes()
 
 	// client := graphql.NewClient("http://localhost:8080/v1/graphql", nil)
 	// client = client.WithRequestModifier(func(req *http.Request) {
