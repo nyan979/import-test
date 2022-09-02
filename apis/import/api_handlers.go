@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/minio/minio-go"
@@ -13,13 +14,16 @@ type MinioClient struct {
 }
 
 func setMinioClient() *minio.Client {
-	endpoint := "localhost:9000"
-	accessKeyID := "minioadmin"
-	secretAccessKey := "minioadmin"
+	host := os.Getenv("MINIO_HOST")
+	port := os.Getenv("MINIO_PORT")
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	useSSL := false
 
+	endpoint := host + ":" + port
+
 	// Initialize minio client object.
-	client, err := minio.New(endpoint, accessKeyID, secretAccessKey, useSSL)
+	client, err := minio.New(endpoint, accessKey, secretKey, useSSL)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -36,13 +40,8 @@ func (m *MinioClient) getPresignedUrl(w http.ResponseWriter, r *http.Request) {
 	log.Println(presignedURL)
 }
 
-// func (m *MinioClient) listenBucketNotification() {
-// 	m.client.ListenBucketNotification("ar2-import-bucket", "csv-files/", ".csv", []string {
-
-// 	})
-// }
-
 func (m *MinioClient) SetupRoutes() {
+	port := ":" + os.Getenv("APP_PORT")
 	http.HandleFunc("/upload", m.getPresignedUrl)
-	http.ListenAndServe(":5000", nil)
+	http.ListenAndServe(port, nil)
 }

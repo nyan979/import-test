@@ -1,8 +1,14 @@
 package main
 
-import "mssfoobar/ar2-import/lib/test"
+import (
+	"mssfoobar/ar2-import/lib/test"
+
+	"github.com/joho/godotenv"
+)
 
 func main() {
+	godotenv.Load("../../.env")
+
 	var gqlClient test.Activities
 	var minioClient MinioClient
 
@@ -11,5 +17,4 @@ func main() {
 
 	//gqlClient.ImportCsvActivity("./lib/data/data.csv")
 	minioClient.SetupRoutes()
-
 }
