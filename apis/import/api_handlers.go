@@ -11,13 +11,15 @@ import (
 	"github.com/minio/minio-go"
 )
 
-// type RequestPayload struct {
-// 	RequestId  string `json:"requestId"`
-// 	UploadType string `json:"uploadType`
-// }
+type RequestPayload struct {
+	RequestId  string `json:"requestId"`
+	UploadType string `json:"uploadType"`
+	FileKey    string `json:"fileKey"`
+}
 
 type jsonResponse struct {
-	Url string `json:"url"`
+	RequestId string `json:"requestId"`
+	Url       string `json:"url"`
 }
 
 func setMinioClient() *minio.Client {
@@ -45,18 +47,30 @@ func setMinioClient() *minio.Client {
 }
 
 func (app *Config) getPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	presignedURL, err := app.minioClient.PresignedPutObject("ar2-import-bucket", "sample", time.Duration(1000)*time.Second)
+	var requestpayload RequestPayload
+
+	dec := json.NewDecoder(r.Body)
+	err := dec.Decode(&requestpayload)
 	if err != nil {
 		log.Fatalln(err)
+		return
+	}
+
+	presignedURL, err := app.minioClient.PresignedPutObject("ar2-import", "sample", time.Duration(1000)*time.Second)
+	if err != nil {
+		log.Fatalln(err)
+		return
 	}
 
 	payload := jsonResponse{
-		Url: presignedURL.String(),
+		RequestId: requestpayload.RequestId,
+		Url:       presignedURL.String(),
 	}
 
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		log.Fatalln(err)
+		return
 	}
 
 	// log.Println(presignedURL)
