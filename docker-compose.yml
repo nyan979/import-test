@@ -1,0 +1,32 @@
+services:
+  # === === App Services === ===
+  ar2-import-api:
+    container_name: ar2-import-api
+    image: ${REPONAME}/ar2-import-api:${TAG}
+    build: 
+      context: ./
+      dockerfile: Dockerfile
+    environment:
+      - APP_PORT=${APP_PORT}
+      - GQL_ENDPOINT=${GQL_ENDPOINT}
+      - HASURA_GRAPHQL_ADMIN_SECRET=${HASURA_GRAPHQL_ADMIN_SECRET}
+      - SERVICE_VERSION=${SERVICE_VERSION}
+      - DEVELOPMENT=${DEVELOPMENT}
+      - MINIO_HOST=${MINIO_HOST}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+    ports:
+      - ${APP_PORT}:${APP_PORT}
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+    networks:
+      - ar-network
+# === Network ===
+networks:
+  ar-network:
+    driver: bridge
+    name: ar-network
