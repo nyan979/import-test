@@ -135,7 +135,7 @@ jobs:
         echo "my_tag: ${my_tag}"
 
         cd ./SRC
-        REPONAME=${{ env.image_prefix }} TAG=${my_tag} docker-compose -f docker-compose.dev.yml build ${{ matrix.app-name }}
+        REPONAME=${{ env.image_prefix }} TAG=${my_tag} docker-compose -f docker-compose.yml build ${{ matrix.app-name }}
 
         docker push ${{ env.image_prefix }}/${{ matrix.app-name }}:${my_tag}
 
