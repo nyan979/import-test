@@ -1,0 +1,215 @@
+name: CI for ar2-import
+
+env:
+  image_prefix: 991204835536.dkr.ecr.ap-southeast-1.amazonaws.com/ar2
+  manifest_repo: mssfoobar/hydra
+  manifest_branch: app-of-apps
+  src_branch: main
+  app_name: ar2-import
+
+on:
+  push:
+    branches:
+      - dev-cicd
+      - main
+    paths:
+      - '**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-ar2-import-${{ github.ref }}-1
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  
+  matrix:
+    name: Prepare sequence
+    runs-on: ubuntu-latest
+    outputs:
+       matrix: ${{ steps.setmatrix.outputs.matrix }}
+    steps:
+      - name: "🔎 Get changed files"
+        uses: lots0logs/gh-action-get-changed-files@2.1.4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "📚 Consolidate info for sequencing matrix"
+        id: setmatrix
+        run: |
+          echo "** changed files:"
+          cat ${HOME}/files.json 
+          echo "=========="
+
+          WANTED_APPS=${{ env.app_name }}
+          echo "init WANTED_APPS: $WANTED_APPS"
+
+          matrixStringifiedObject='{"include":['
+          matrixStringifiedObject="${matrixStringifiedObject}"'{"pod-name":"ar2-import","app-name":"ar2-import-api"},'
+          matrixStringifiedObject="${matrixStringifiedObject}"']}'
+
+          echo "matrixStringifiedObject: $matrixStringifiedObject"
+          echo "::set-output name=matrix::$matrixStringifiedObject"
+
+  test:
+    if: ${{ fromJson(needs.matrix.outputs.matrix != '{"include":[]}' ) }}
+    name: "Execute tests"
+    runs-on: ubuntu-latest
+    needs: matrix
+    strategy:
+      matrix: ${{fromJson(needs.matrix.outputs.matrix)}}
+
+    steps:
+    - name: "☁️ Checkout code"
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ env.src_branch }}
+        path: ./SRC
+
+    - name: "Execute tests"
+      run: |
+        echo "TEMP placeholder"
+    - name: "Execute code analysis"
+      run: |
+        echo "TEMP placeholder"
+
+  container:
+    if: ${{ fromJson(needs.matrix.outputs.matrix != '{"include":[]}' ) }}
+    name: "Process containers"
+    runs-on: ubuntu-latest
+    needs: 
+    - test
+    - matrix
+    strategy:
+      matrix: ${{fromJson(needs.matrix.outputs.matrix)}}
+
+    steps:
+
+    - name: "☁️ Checkout code"
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ env.src_branch }}
+        path: ./SRC
+
+    - name: "🔧 Configure access to Image Repository"
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-southeast-1
+
+    - name: "🔧 Login to Image Repository"
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: "🔧 Set pod version info"
+      run: |
+        cd ./SRC
+        git_hash=$(git rev-parse --short "$GITHUB_SHA")
+        echo "git_hash=${git_hash}"
+        my_tag=${GITHUB_REF##*/}-${git_hash}
+
+        mkdir -p ./TAG
+        echo ${my_tag}  > ./TAG/pod
+
+    - name: "🔧 ${{ matrix.app-name }} - Set app version"
+      run: |
+        cd ./SRC
+        git_hash=$(git rev-parse --short "$GITHUB_SHA")
+        echo "git_hash=${git_hash}"
+        my_tag=${GITHUB_REF##*/}-${git_hash}
+        #echo "my_tag=${my_tag}" >> $GITHUB_ENV
+        cd ../
+
+        mkdir -p ./TAG
+        echo ${my_tag}  > ./TAG/${{ matrix.app-name }}
+        echo "wrote ${my_tag} for pod ${{ matrix.app-name }}"
+
+    - name: "📦 ${{ matrix.app-name }} - Build and upload container image"
+      run: |
+
+        my_tag=$(cat ./TAG/${{ matrix.app-name }})
+        echo "my_tag: ${my_tag}"
+
+        cd ./SRC
+        REPONAME=${{ env.image_prefix }} TAG=${my_tag} docker-compose -f docker-compose.dev.yml build ${{ matrix.app-name }}
+
+        docker push ${{ env.image_prefix }}/${{ matrix.app-name }}:${my_tag}
+
+    - name: "📂 ${{ matrix.app-name }} - Save tag info"
+      uses: actions/upload-artifact@v3
+      with:
+        # name: ${{ matrix.app-name }}-tag
+        name: ${{ env.app_name }}-tag
+        path: ./TAG
+        if-no-files-found: error
+        retention-days: 3
+
+  release:
+    needs: container
+    name: Process deployment manifest
+    runs-on: ubuntu-latest
+    steps:
+    - name: "☁️ Checkout manifest"
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ env.manifest_branch }}
+        repository: ${{ env.manifest_repo }}
+        token: ${{ secrets.PAT }}
+        path: ./MFT
+
+    - name: "📂 download artifacts of current build"
+      uses: actions/download-artifact@v3
+      continue-on-error: false
+      with:
+        name: ${{ env.app_name }}-tag
+        path: ./TAG
+
+    - name: "✏ Write tag info of current build"
+      run: |
+        cd ./TAG
+        # for this case, submodules all having the same tag
+        for tagFile in `ls`; do
+          echo "processing tagFile: ${tagFile}"
+          newTag=$(cat $tagFile)
+        done
+        cd ..
+
+        valuesFile=./MFT/argocd/ar2/helm/ar2-import/values.yaml
+        oldTag=$(cat $valuesFile | grep tag: | head -n 1 | awk '{print $2}' | tr -d '\n')
+        echo "** $valuesFile ::: replacing $oldTag with ${newTag}"
+        sed -i "s|$oldTag|$newTag|g" $valuesFile
+
+    - name: "🖃 Commit changes of current build"
+      run: |
+        cd ./MFT
+        git config user.email "arilrad@stengg.com"
+        git config user.name "agilrad"
+        git commit -m "[auto] version updated" -a
+
+    - name: "🚀 Upload manifest"
+      uses: ad-m/github-push-action@master
+      with:
+        directory: ./MFT
+        branch: ${{ env.manifest_branch }}
+        repository: ${{ env.manifest_repo }}
+        token: ${{ secrets.PAT }}
+
+  notify:
+    name: Notify on Slack
+    runs-on: ubuntu-latest
+    needs: [release]
+
+    # if: ${{ github.base_ref == 'main' && github.event_name == 'pull_request' }}
+    steps:
+      - uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          # fields: all
+          fields: repo,commit,message,author,workflow
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()
