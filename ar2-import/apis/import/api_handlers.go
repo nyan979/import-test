@@ -65,9 +65,16 @@ func (app *Config) getPresignedUrl(w http.ResponseWriter, r *http.Request, ps ht
 		return
 	}
 
+	uploadType := ps.ByName("uploadType")
+	requestId := ps.ByName("requestId")
+	if len(requestId) == 0 || len(uploadType) == 0 {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	payload := jsonResponse{
 		PresignedUrl: presignedURL.String(),
-		RequestId:    ps.ByName("requestId"),
+		RequestId:    requestId,
 	}
 
 	jsonPayload, err := json.Marshal(payload)
