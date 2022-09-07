@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -22,12 +24,6 @@ func setMinioClient() *minio.Client {
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	useSSL := false
-
-	// host := "localhost"
-	// port := "9000"
-	// accessKey := "minioadmin"
-	// secretKey := "minioadmin"
-	// useSSL := false
 
 	endpoint := host + ":" + port
 
@@ -86,4 +82,25 @@ func (app *Config) getPresignedUrl(w http.ResponseWriter, r *http.Request, ps ht
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonPayload)
+}
+
+func (app *Config) getObject() {
+	object, err := app.minioClient.GetObject("ar2-import", "data.csv", minio.GetObjectOptions{})
+	if err != nil {
+		log.Fatalln(err)
+		return
+	}
+
+	reader := csv.NewReader(object)
+
+	for {
+		line, err := reader.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println(line)
+	}
 }
