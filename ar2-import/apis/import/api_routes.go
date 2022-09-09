@@ -20,7 +20,7 @@ func corsware(next httprouter.Handle) httprouter.Handle {
 	}
 }
 
-func (app *Config) routes() http.Handler {
+func (app *Application) routes() http.Handler {
 	router := httprouter.New()
 
 	router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

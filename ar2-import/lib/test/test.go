@@ -4,33 +4,17 @@ import (
 	"context"
 	"io"
 	"log"
-	"net/http"
-	"os"
 
 	"github.com/hasura/go-graphql-client"
+	"github.com/minio/minio-go"
 )
 
-type Activities struct {
+type TestActivities struct {
+	MinioClient   *minio.Client
 	GraphQlClient *graphql.Client
 }
 
-func TestImportWorkflow() *graphql.Client {
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	gqlEndpoint := os.Getenv("GQL_ENDPOINT")
-	adminkey := os.Getenv("HASURA_GRAPHQL_ADMIN_SECRET")
-
-	graphqlURL := "http://" + dbHost + ":" + dbPort + "/" + gqlEndpoint
-
-	client := graphql.NewClient(graphqlURL, nil)
-	client = client.WithRequestModifier(func(req *http.Request) {
-		req.Header.Set("x-hasura-admin-secret", adminkey)
-	})
-
-	return client
-}
-
-func (a *Activities) ImportCsvActivity(filepath string) error {
+func (a *TestActivities) ImportCsvActivity(filepath string) error {
 	type import_csv_insert_input struct {
 		Id              string `json:"id,omitempty"`
 		Column1         string `json:"column_1,omitempty"`
@@ -58,6 +42,7 @@ func (a *Activities) ImportCsvActivity(filepath string) error {
 			break
 		} else if err != nil {
 			log.Fatal(err)
+			return err
 		}
 
 		variables = map[string]interface{}{
@@ -73,6 +58,7 @@ func (a *Activities) ImportCsvActivity(filepath string) error {
 
 		if err := a.GraphQlClient.Mutate(context.Background(), &mutation, variables); err != nil {
 			log.Fatal(err)
+			return err
 		}
 	}
 
