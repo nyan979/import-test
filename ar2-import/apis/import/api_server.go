@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"mssfoobar/ar2-import/ar2-import/lib/utils"
-	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 	"net/http"
 	"os"
 
@@ -15,7 +14,6 @@ import (
 type Application struct {
 	minioClient   *minio.Client
 	graphqlClient *graphql.Client
-	uploadConfig  workflow.UploadTypeConfiguration
 }
 
 func main() {

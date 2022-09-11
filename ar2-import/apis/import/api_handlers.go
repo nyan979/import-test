@@ -40,7 +40,7 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 	uploadType := ps.ByName("uploadType")
 	requestId := ps.ByName("requestId")
 
-	if len(requestId) == 0 || len(uploadType) == 0 {
+	if requestId == ":requestId" || uploadType == ":uploadType" {
 		http.Error(w, "Invalid Request", http.StatusBadRequest)
 		return
 	}
@@ -49,15 +49,38 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 	activities.GraphQlClient = app.graphqlClient
 	activities.MinioClient = app.minioClient
 
-	config, err := activities.ReadConfigTable("serviceX")
+	status, err := activities.IsRequestIdBusy(&requestId)
 	if err != nil {
-		log.Fatalln(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if status {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		payload := jsonResponse{
+			RequestId: requestId,
+		}
+		jsonPayload, _ := json.Marshal(payload)
+		w.Write(jsonPayload)
+		return
+	}
+
+	config, err := activities.ReadConfigTable(uploadType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = activities.InsertConfigRunTimeTable(requestId, string(config[0].Id))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	url, err := activities.GetPresignedUrl(config)
 	if err != nil {
-		log.Fatalln(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -66,11 +89,7 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		RequestId:    requestId,
 	}
 
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		log.Fatalln(err)
-		return
-	}
+	jsonPayload, _ := json.Marshal(payload)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
