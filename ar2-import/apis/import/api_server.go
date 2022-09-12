@@ -1,10 +1,8 @@
 package main
 
 import (
-	"log"
 	"mssfoobar/ar2-import/ar2-import/lib/utils"
-	"net/http"
-	"os"
+	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/joho/godotenv"
@@ -24,30 +22,25 @@ func main() {
 		graphqlClient: utils.SetGraphqlClient(),
 	}
 
-	// go kafka.StartKafka()
+	// go app.StartKafka()
 
 	// fmt.Println("Kafka has been started...")
 
 	// time.Sleep(10 * time.Minute)
 
-	// app.getObject()
+	// port := ":" + os.Getenv("APP_PORT")
 
-	port := ":" + os.Getenv("APP_PORT")
-
-	err := http.ListenAndServe(port, app.routes())
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	// var activities test.Activities
-
-	// activities.GraphQlClient = app.graphqlClient
-
-	// config, err := activities.ReadConfigTable("serviceX")
+	// err := http.ListenAndServe(port, app.routes())
 	// if err != nil {
 	// 	log.Fatalln(err)
 	// }
 
-	// fmt.Println(config[0].FileKey)
+	var activities workflow.Activities
+
+	activities.GraphQlClient = app.graphqlClient
+	activities.MinioClient = app.minioClient
+
+	activities.GetObject("serviceX-12345")
+
 	// gqlClient.ImportCsvActivity("./lib/data/data.csv")
 }

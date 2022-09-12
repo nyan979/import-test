@@ -1,8 +1,11 @@
 package workflow
 
 import (
+	"bufio"
 	"context"
+	"encoding/csv"
 	"errors"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -37,7 +40,7 @@ type RunTimeConfiguration []struct {
 
 func (a *Activities) ReadConfigTable(uploadType string) (UploadTypeConfiguration, error) {
 	var q struct {
-		UploadTypeConfiguration `graphql:"import_config_config(where: {uploadType: {_eq: $configUploadType}})"`
+		UploadTypeConfiguration `graphql:"import_configuration(where: {uploadType: {_eq: $configUploadType}})"`
 	}
 
 	variables := map[string]interface{}{
@@ -58,7 +61,7 @@ func (a *Activities) ReadConfigTable(uploadType string) (UploadTypeConfiguration
 }
 
 func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (*url.URL, error) {
-	presignedURL, err := a.MinioClient.PresignedPutObject(os.Getenv("MINIO_BUCKET_NAME"), string(config[0].FileKey),
+	presignedURL, err := a.MinioClient.PresignedPutObject(os.Getenv("MINIO_BUCKET_NAME"), string(config[0].FileKey)+".csv",
 		time.Duration(config[0].UploadExpiryDurationInSec)*time.Second)
 	if err != nil {
 		log.Fatalln(err)
@@ -70,10 +73,8 @@ func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (*url.URL, 
 
 func (a *Activities) IsRequestIdBusy(requestId *string) (bool, error) {
 	var q struct {
-		RunTimeConfiguration `graphql:"import_config_runtime(where: {requestId: {_eq: $reqId}})"`
+		RunTimeConfiguration `graphql:"import_runtime(where: {requestId: {_eq: $reqId}})"`
 	}
-
-	log.Println(*requestId)
 
 	variables := map[string]interface{}{
 		"reqId": graphql.String(*requestId),
@@ -104,7 +105,7 @@ func (a *Activities) IsRequestIdBusy(requestId *string) (bool, error) {
 }
 
 func (a *Activities) InsertConfigRunTimeTable(requestId string, configId string) error {
-	type import_config_runtime_insert_input struct {
+	type import_runtime_insert_input struct {
 		RequestId   string `json:"requestId"`
 		ConfigId    string `json:"configId"`
 		Status      string `json:"status"`
@@ -115,11 +116,11 @@ func (a *Activities) InsertConfigRunTimeTable(requestId string, configId string)
 		InsertData struct {
 			CreatedAt graphql.String
 			UpdatedAt graphql.String
-		} `graphql:"insert_import_config_runtime_one(object: $object)"`
+		} `graphql:"insert_import_runtime_one(object: $object)"`
 	}
 
 	variables := map[string]interface{}{
-		"object": import_config_runtime_insert_input{
+		"object": import_runtime_insert_input{
 			RequestId:   requestId,
 			ConfigId:    configId,
 			Status:      "uploading",
@@ -133,4 +134,36 @@ func (a *Activities) InsertConfigRunTimeTable(requestId string, configId string)
 	}
 
 	return nil
+}
+
+func (a *Activities) GetObject(filekey string) {
+	object, err := a.MinioClient.GetObject(os.Getenv("MINIO_BUCKET_NAME"), filekey, minio.GetObjectOptions{})
+	if err != nil {
+		log.Fatalln(err)
+		return
+	}
+
+	var lines [][]string
+	var offset int64
+
+	for i := 1; i <= 5; i++ {
+		row, _ := bufio.NewReader(object).ReadSlice('\n')
+		offset += int64(len(row))
+		object.Seek(offset, 0)
+	}
+
+	object.Seek(offset, 0)
+
+	reader := csv.NewReader(object)
+
+	for {
+		line, err := reader.Read()
+		if err == io.EOF || err != nil {
+			log.Println(err)
+			break
+		}
+
+		lines = append(lines, line)
+	}
+	log.Println(lines)
 }

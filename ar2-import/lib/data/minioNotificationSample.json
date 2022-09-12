@@ -1,0 +1,52 @@
+{
+  "EventName": "s3:ObjectCreated:Put",
+  "Key": "ar2-import/data.csv",
+  "Records": [
+    {
+      "eventVersion": "2.0",
+      "eventSource": "minio:s3",
+      "awsRegion": "",
+      "eventTime": "2022-09-12T04:32:18.571Z",
+      "eventName": "s3:ObjectCreated:Put",
+      "userIdentity": { "principalId": "minioadmin" },
+      "requestParameters": {
+        "principalId": "minioadmin",
+        "region": "",
+        "sourceIPAddress": "10.42.4.140"
+      },
+      "responseElements": {
+        "content-length": "0",
+        "x-amz-request-id": "171402B4E9D14778",
+        "x-minio-deployment-id": "ab39afb0-03c2-448b-9f07-40787b824929",
+        "x-minio-origin-endpoint": "http://10.42.4.140:9000"
+      },
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "configurationId": "Config",
+        "bucket": {
+          "name": "ar2-import",
+          "ownerIdentity": { "principalId": "minioadmin" },
+          "arn": "arn:aws:s3:::ar2-import"
+        },
+        "object": {
+          "key": "data.csv",
+          "size": 411,
+          "eTag": "ca3bbdb4658320670f2901836bf0d3ce",
+          "contentType": "text/csv",
+          "userMetadata": {
+            "content-type": "text/csv",
+            "x-amz-object-lock-mode": "COMPLIANCE",
+            "x-amz-object-lock-retain-until-date": "2022-12-11T04:32:18.453Z"
+          },
+          "versionId": "638f95fd-5531-44e6-a969-5825ac2ca570",
+          "sequencer": "171402B4F13B497E"
+        }
+      },
+      "source": {
+        "host": "10.42.4.140",
+        "port": "",
+        "userAgent": "MinIO (linux; amd64) minio-go/v7.0.34"
+      }
+    }
+  ]
+}
