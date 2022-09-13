@@ -13,11 +13,14 @@ import (
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/minio/minio-go"
+	"github.com/segmentio/kafka-go"
 )
 
 type Activities struct {
 	MinioClient   *minio.Client
 	GraphQlClient *graphql.Client
+	KafkaReader   *kafka.Reader
+	KafkaWriter   *kafka.Writer
 }
 
 type UploadTypeConfiguration []struct {
@@ -136,34 +139,57 @@ func (a *Activities) InsertConfigRunTimeTable(requestId string, configId string)
 	return nil
 }
 
-func (a *Activities) GetObject(filekey string) {
+func (a *Activities) GetObject(filekey string) ([][]string, error) {
 	object, err := a.MinioClient.GetObject(os.Getenv("MINIO_BUCKET_NAME"), filekey, minio.GetObjectOptions{})
 	if err != nil {
-		log.Fatalln(err)
-		return
+		return nil, err
 	}
 
 	var lines [][]string
 	var offset int64
 
-	for i := 1; i <= 5; i++ {
+	scanner := bufio.NewScanner(bufio.NewReader(object))
+	counter := 0
+
+	for scanner.Scan() {
+		counter++
+	}
+
+	for i := 0; i <= 5; i++ {
 		row, _ := bufio.NewReader(object).ReadSlice('\n')
 		offset += int64(len(row))
 		object.Seek(offset, 0)
 	}
 
-	object.Seek(offset, 0)
-
 	reader := csv.NewReader(object)
 
-	for {
+	for i := 1; i <= counter-7; i++ {
 		line, err := reader.Read()
-		if err == io.EOF || err != nil {
-			log.Println(err)
+		if err == io.EOF {
 			break
 		}
-
+		if err != nil {
+			log.Fatalln(err)
+		}
 		lines = append(lines, line)
 	}
-	log.Println(lines)
+
+	return lines, nil
+}
+
+func (a *Activities) ParseLine(filekey string) ([]string, error) {
+	object, err := a.MinioClient.GetObject(os.Getenv("MINIO_BUCKET_NAME"), filekey, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var lines []string
+
+	scanner := bufio.NewScanner(bufio.NewReader(object))
+
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	return lines, nil
 }

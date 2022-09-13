@@ -1,11 +1,9 @@
-package main
+package workflow
 
 import (
 	"context"
 	"encoding/json"
 	"log"
-	"mssfoobar/ar2-import/ar2-import/lib/workflow"
-	"os"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -65,25 +63,16 @@ type Message struct {
 	} `json:"Records"`
 }
 
-func (app *Application) StartKafkaConsumer(ctx context.Context, messages chan<- kafka.Message) error {
-	conf := kafka.ReaderConfig{
-		Brokers:  []string{os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")},
-		Topic:    os.Getenv("KAFKA_IMPORT_TOPIC"),
-		GroupID:  "1",
-		MaxBytes: 10,
-	}
-
-	r := kafka.NewReader(conf)
-
+func (a *Activities) ReadMessage(ctx context.Context, messages chan<- kafka.Message) error {
 	var msg Message
 
 	for {
-		m, err := r.ReadMessage(context.Background())
+		message, err := a.KafkaReader.ReadMessage(ctx)
 		if err != nil {
-			log.Fatalln(err)
-			continue
+			return err
 		}
-		err = json.Unmarshal(m.Value, &msg)
+
+		err = json.Unmarshal(message.Value, &msg)
 		if err != nil {
 			log.Fatalln(err)
 			continue
@@ -91,29 +80,57 @@ func (app *Application) StartKafkaConsumer(ctx context.Context, messages chan<- 
 		log.Println(msg.Records[0].S3.Object.VersionId)
 		log.Println(msg.Records[0].S3.Object.Key)
 
-		var activities workflow.Activities
-		activities.GraphQlClient = app.graphqlClient
-		activities.MinioClient = app.minioClient
+		lines, err := a.ParseLine(msg.Records[0].S3.Object.Key)
+		if err != nil {
+			log.Fatalln(err)
+			continue
+		}
 
-		activities.GetObject(msg.Records[0].S3.Object.Key)
+		for _, v := range lines {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case messages <- kafka.Message{
+				Value: []byte(v),
+			}:
+				log.Printf("message fetched and sent to a channel: %v \n", string(message.Value))
+
+			}
+		}
 	}
 }
 
-func (app *Application) StartKafkaProducer() {
-	w := &kafka.Writer{
-		Addr:     kafka.TCP(os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")),
-		Topic:    "service.in",
-		Balancer: &kafka.LeastBytes{},
+func (a *Activities) CommitMessages(ctx context.Context, messageCommitChan <-chan kafka.Message) error {
+	for {
+		select {
+		case <-ctx.Done():
+		case msg := <-messageCommitChan:
+			err := a.KafkaReader.CommitMessages(ctx, msg)
+			if err != nil {
+				return err
+			}
+			log.Printf("committed an msg: %v \n", string(msg.Value))
+		}
 	}
+}
 
-	err := w.WriteMessages(context.Background(),
-		kafka.Message{
-			Value: []byte("Hellow World!"),
-		})
-	if err != nil {
-		log.Fatalln("failed to write messages:", err)
-	}
-	if err := w.Close(); err != nil {
-		log.Fatalln("failed to close writer:", err)
+func (a *Activities) WriteMessages(ctx context.Context, messages chan kafka.Message, messageCommitChan chan kafka.Message) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case m := <-messages:
+			err := a.KafkaWriter.WriteMessages(ctx, kafka.Message{
+				Value: m.Value,
+			})
+			if err != nil {
+				return err
+			}
+
+			select {
+			case <-ctx.Done():
+			case messageCommitChan <- m:
+			}
+		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/minio/minio-go"
+	"github.com/segmentio/kafka-go"
 )
 
 func SetMinioClient() *minio.Client {
@@ -40,4 +41,22 @@ func SetGraphqlClient() *graphql.Client {
 	})
 
 	return client
+}
+
+func NewKafkaReader() *kafka.Reader {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: []string{os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")},
+		Topic:   os.Getenv("KAFKA_IMPORT_TOPIC"),
+		GroupID: "1",
+	})
+
+	return reader
+}
+
+func NewKafkaWriter() *kafka.Writer {
+	writer := &kafka.Writer{
+		Addr:  kafka.TCP(os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")),
+		Topic: os.Getenv("KAFKA_SERVICE_TOPIC"),
+	}
+	return writer
 }
