@@ -3,9 +3,8 @@ package workflow
 import (
 	"bufio"
 	"context"
-	"encoding/csv"
+	"encoding/json"
 	"errors"
-	"io"
 	"log"
 	"net/url"
 	"os"
@@ -39,6 +38,61 @@ type RunTimeConfiguration []struct {
 	Description   graphql.String
 	CreatedAt     graphql.String
 	UpdatedAt     graphql.String
+}
+
+type Message struct {
+	EventName string `json:"EventName"`
+	Key       string `json:"Key"`
+	Records   []struct {
+		EventVersion string `json:"eventVersion"`
+		EventSource  string `json:"eventSource"`
+		AwsRegion    string `json:"awsRegion"`
+		EventTime    string `json:"eventTime"`
+		EventName    string `json:"eventName"`
+		UserIdentity struct {
+			PrincipalId string `json:"principalId"`
+		} `json:"userIdentity"`
+		RequestParameters struct {
+			PrincipalId     string `json:"principalId"`
+			Region          string `json:"region"`
+			SourceIPAddress string `json:"sourceIPAddress"`
+		} `json:"requestParameters"`
+		ResponseElements struct {
+			Content_Length          string `json:"content-length"`
+			X_AMZ_RequestId         string `json:"x-amz-request-id"`
+			X_MINIO_Deployment_Id   string `json:"x-minio-deployment-id"`
+			X_MINIO_Origin_Endpoint string `json:"x-minio-origin-endpoint"`
+		} `json:"responseElements"`
+		S3 struct {
+			S3SchemaVersion string `json:"s3SchemaVersion"`
+			ConfigurationId string `json:"configurationId"`
+			Bucket          struct {
+				Name          string `json:"name"`
+				OwnerIdentity struct {
+					PrincipalId string `json:"principalId"`
+				}
+				ARN string `json:"arn"`
+			} `json:"bucket"`
+			Object struct {
+				Key          string `json:"key"`
+				Size         int    `json:"size"`
+				ETag         string `json:"eTag"`
+				ContentType  string `json:"contentType"`
+				UserMetaData struct {
+					ContentType                         string `json:"contentType"`
+					X_AMZ_Object_Lock_Mode              string `json:"x-amz-object-lock-mode"`
+					X_AMZ_Object_Lock_Retain_Until_Date string `json:"x-amz-object-lock-retain-until-date"`
+				} `json:"userMetadata"`
+				VersionId string `json:"versionId"`
+				Sequencer string `json:"sequencer"`
+			} `json:"Object"`
+		} `json:"s3"`
+		Source struct {
+			Host      string `json:"host"`
+			Port      string `json:"port"`
+			UserAgent string `json:"userAgent"`
+		} `json:"source"`
+	} `json:"Records"`
 }
 
 func (a *Activities) ReadConfigTable(uploadType string) (UploadTypeConfiguration, error) {
@@ -139,45 +193,19 @@ func (a *Activities) InsertConfigRunTimeTable(requestId string, configId string)
 	return nil
 }
 
-func (a *Activities) GetObject(filekey string) ([][]string, error) {
-	object, err := a.MinioClient.GetObject(os.Getenv("MINIO_BUCKET_NAME"), filekey, minio.GetObjectOptions{})
+func (a *Activities) ReadMinioNotification(message kafka.Message) (string, error) {
+	var msg Message
+
+	err := json.Unmarshal(message.Value, &msg)
 	if err != nil {
-		return nil, err
+		log.Fatalln(err)
+		return "", err
 	}
 
-	var lines [][]string
-	var offset int64
-
-	scanner := bufio.NewScanner(bufio.NewReader(object))
-	counter := 0
-
-	for scanner.Scan() {
-		counter++
-	}
-
-	for i := 0; i <= 5; i++ {
-		row, _ := bufio.NewReader(object).ReadSlice('\n')
-		offset += int64(len(row))
-		object.Seek(offset, 0)
-	}
-
-	reader := csv.NewReader(object)
-
-	for i := 1; i <= counter-7; i++ {
-		line, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Fatalln(err)
-		}
-		lines = append(lines, line)
-	}
-
-	return lines, nil
+	return msg.Records[0].S3.Object.Key, nil
 }
 
-func (a *Activities) ParseLine(filekey string) ([]string, error) {
+func (a *Activities) ParseCSVToLine(filekey string) ([]string, error) {
 	object, err := a.MinioClient.GetObject(os.Getenv("MINIO_BUCKET_NAME"), filekey, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err

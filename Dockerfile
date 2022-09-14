@@ -1,6 +1,8 @@
 FROM golang:1.18.1-alpine3.15 AS build
 
 COPY ./ar2-import/apis/import /app/ar2-import/apis/import
+COPY ./ar2-import/lib/utils /app/ar2-import/lib/utils
+COPY ./ar2-import/lib/workflow /app/ar2-import/lib/workflow
 COPY ./go.mod /app/go.mod
 COPY ./go.sum /app/go.sum
 
