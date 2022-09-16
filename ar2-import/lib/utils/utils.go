@@ -47,7 +47,7 @@ func NewKafkaReader() *kafka.Reader {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")},
 		Topic:   os.Getenv("KAFKA_IMPORT_TOPIC"),
-		GroupID: "1",
+		GroupID: "minio-consumer-group-1",
 	})
 
 	return reader
@@ -56,9 +56,8 @@ func NewKafkaReader() *kafka.Reader {
 func NewKafkaWriter() *kafka.Writer {
 
 	writer := &kafka.Writer{
-		Addr:     kafka.TCP(os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")),
-		Topic:    os.Getenv("KAFKA_SERVICE_TOPIC"),
-		Balancer: &kafka.ReferenceHash{},
+		Addr:  kafka.TCP(os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")),
+		Topic: os.Getenv("KAFKA_SERVICE_TOPIC"),
 	}
 
 	return writer

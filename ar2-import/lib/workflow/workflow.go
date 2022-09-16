@@ -17,9 +17,10 @@ import (
 
 type Activities struct {
 	MinioClient   *minio.Client
-	GraphQlClient *graphql.Client
+	GraphqlClient *graphql.Client
 	KafkaReader   *kafka.Reader
-	//KafkaWriter   *kafka.Writer
+	KafkaWriter   *kafka.Writer
+	RequestId     string
 }
 
 type UploadTypeConfiguration []struct {
@@ -104,7 +105,7 @@ func (a *Activities) ReadConfig(uploadType string) (UploadTypeConfiguration, err
 		"configUploadType": graphql.String(uploadType),
 	}
 
-	if err := a.GraphQlClient.Query(context.Background(), &q, variables); err != nil {
+	if err := a.GraphqlClient.Query(context.Background(), &q, variables); err != nil {
 		log.Fatal(err)
 		return nil, err
 	}
@@ -128,16 +129,16 @@ func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (*url.URL, 
 	return presignedURL, nil
 }
 
-func (a *Activities) IsRequestIdBusy(requestId *string) (bool, error) {
+func (a *Activities) IsAnotherUploadRunning(uploadType string, requestId *string) (bool, error) {
 	var q struct {
-		RunTimeConfiguration `graphql:"import_runtime(where: {requestId: {_eq: $reqId}})"`
+		RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {uploadType: {_eq: $uploadType}}}, distinct_on: status)"`
 	}
 
 	variables := map[string]interface{}{
-		"reqId": graphql.String(*requestId),
+		"uploadType": graphql.String(uploadType),
 	}
 
-	if err := a.GraphQlClient.Query(context.Background(), &q, variables); err != nil {
+	if err := a.GraphqlClient.Query(context.Background(), &q, variables); err != nil {
 		return false, err
 	}
 
@@ -145,20 +146,14 @@ func (a *Activities) IsRequestIdBusy(requestId *string) (bool, error) {
 		return false, nil
 	}
 
-	switch status := q.RunTimeConfiguration[0].Status; status {
-	case "uploading":
-		*requestId = string(q.RunTimeConfiguration[0].RequestId)
-		return true, nil
-	case "importing":
-		*requestId = string(q.RunTimeConfiguration[0].RequestId)
-		return true, nil
-	case "completed":
-		return false, nil
-	case "failed":
-		return false, nil
-	default:
-		return false, nil
+	for _, v := range q.RunTimeConfiguration {
+		if v.Status == "uploading" || v.Status == "importing" {
+			*requestId = string(q.RunTimeConfiguration[0].RequestId)
+			return true, nil
+		}
 	}
+
+	return false, nil
 }
 
 func (a *Activities) InsertConfigRunTime(requestId string, configId string) error {
@@ -185,7 +180,7 @@ func (a *Activities) InsertConfigRunTime(requestId string, configId string) erro
 		},
 	}
 
-	if err := a.GraphQlClient.Mutate(context.Background(), &mutation, variables); err != nil {
+	if err := a.GraphqlClient.Mutate(context.Background(), &mutation, variables); err != nil {
 		log.Fatal(err)
 		return err
 	}
@@ -205,7 +200,7 @@ func (a *Activities) UpdateConfigRunTimeFileVersion(requestId string, version st
 		"verId": graphql.String(version),
 	}
 
-	if err := a.GraphQlClient.Mutate(context.Background(), &mutation, variables); err != nil {
+	if err := a.GraphqlClient.Mutate(context.Background(), &mutation, variables); err != nil {
 		log.Fatal(err)
 		return err
 	}
@@ -225,7 +220,7 @@ func (a *Activities) UpdateConfigRunTimeStatus(requestId string, status string) 
 		"status": graphql.String(status),
 	}
 
-	if err := a.GraphQlClient.Mutate(context.Background(), &mutation, variables); err != nil {
+	if err := a.GraphqlClient.Mutate(context.Background(), &mutation, variables); err != nil {
 		log.Fatal(err)
 		return err
 	}

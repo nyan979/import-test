@@ -2,18 +2,19 @@ package main
 
 import (
 	"encoding/json"
-	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 	"net/http"
 	"os"
 
 	"github.com/julienschmidt/httprouter"
 )
 
+// json payload for presigned url response
 type jsonResponse struct {
 	PresignedUrl string `json:"presignedUrl"`
 	RequestId    string `json:"requestId"`
 }
 
+// service version end point
 func (app *Application) getVersionInfo(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	buildVersion := os.Getenv("SERVICE_VERSION")
 	w.Header().Set("Content-Type", "application/json")
@@ -26,27 +27,29 @@ func (app *Application) getVersionInfo(w http.ResponseWriter, r *http.Request, _
 	w.Write([]byte(buildVersion))
 }
 
+// service health end point
 func (app *Application) getHealthInfo(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Ok"))
 }
 
+// to recieve requestId and response with presigned Url
 func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	uploadType := ps.ByName("uploadType")
 	requestId := ps.ByName("requestId")
 
+	// invalid request on empty http parameter
 	if requestId == ":requestId" || uploadType == ":uploadType" {
 		http.Error(w, "Invalid Request", http.StatusBadRequest)
 		return
 	}
 
-	activities := workflow.Activities{
-		MinioClient:   app.minioClient,
-		GraphQlClient: app.graphqlClient,
-	}
+	// set requestId to track across go routine
+	app.activities.RequestId = requestId
 
-	status, err := activities.IsRequestIdBusy(&requestId)
+	// check if same uploadType is running. reject if true
+	status, err := app.activities.IsAnotherUploadRunning(uploadType, &requestId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -63,25 +66,25 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	config, err := activities.ReadConfig(uploadType)
+	// insert row into runtime table based on uploadtype configuration
+	config, err := app.activities.ReadConfig(uploadType)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err = activities.InsertConfigRunTime(requestId, string(config[0].Id))
+	err = app.activities.InsertConfigRunTime(requestId, string(config[0].Id))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	url, err := activities.GetPresignedUrl(config)
+	// minio client call to get presigned url and response back to browser
+	url, err := app.activities.GetPresignedUrl(config)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	RequestId <- requestId
 
 	payload := jsonResponse{
 		PresignedUrl: url.String(),

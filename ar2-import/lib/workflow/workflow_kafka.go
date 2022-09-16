@@ -2,11 +2,16 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"log"
-	"os"
 
 	"github.com/segmentio/kafka-go"
 )
+
+type jsonMessage struct {
+	RequestId string `json:"requestId"`
+	Record    string `json:"record"`
+}
 
 func (a *Activities) FetchMessage(ctx context.Context, messages chan<- kafka.Message) error {
 	log.Println("Kafka Fetch Message Starting...")
@@ -25,26 +30,15 @@ func (a *Activities) FetchMessage(ctx context.Context, messages chan<- kafka.Mes
 	}
 }
 
-func (a *Activities) WriteMessages(ctx context.Context, messages <-chan kafka.Message, messagesCommit chan<- kafka.Message, RequestId <-chan string) error {
+func (a *Activities) WriteMessages(ctx context.Context, messages <-chan kafka.Message, messagesCommit chan<- kafka.Message) error {
 	log.Println("Kafka Write Message Starting...")
-
-	address := os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")
-	topic := os.Getenv("KAFKA_SERVICE_TOPIC")
-	counter := 0
-
-	conn, err := kafka.Dial("tcp", address)
-	if err != nil {
-		return err
-	}
-
-	partition, _ := conn.ReadPartitions(topic)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case msg := <-messages:
-			requestId := <-RequestId
+			requestId := a.RequestId
 			minioMsg, err := a.ReadMinioNotification(msg)
 			if err != nil {
 				a.UpdateConfigRunTimeStatus(requestId, "failed")
@@ -72,32 +66,27 @@ func (a *Activities) WriteMessages(ctx context.Context, messages <-chan kafka.Me
 				return err
 			}
 
-			var kafkaMessage []kafka.Message
+			var jsonMessages []jsonMessage
+
 			for _, line := range lines {
-				kafkaMessage = append(kafkaMessage, kafka.Message{
-					Key:   []byte(requestId),
-					Value: []byte(line),
+				jsonMessages = append(jsonMessages, jsonMessage{
+					RequestId: requestId,
+					Record:    line,
 				})
 			}
 
-			conn, err := kafka.DialLeader(ctx, "tcp", address, topic, partition[counter].ID)
-			if err != nil {
-				a.UpdateConfigRunTimeStatus(requestId, "failed")
-				return err
+			var kafkaMessage []kafka.Message
+			for _, msg := range jsonMessages {
+				jsonByte, _ := json.Marshal(msg)
+				kafkaMessage = append(kafkaMessage, kafka.Message{
+					Value: jsonByte,
+				})
 			}
 
-			_, err = conn.WriteMessages(kafkaMessage...)
+			err = a.KafkaWriter.WriteMessages(ctx, kafkaMessage...)
 			if err != nil {
-				a.UpdateConfigRunTimeStatus(requestId, "failed")
 				return err
 			}
-
-			counter = (counter + 1) % len(partition)
-
-			// err = a.KafkaWriter.WriteMessages(ctx, kafkaMessage...)
-			// if err != nil {
-			// 	return err
-			// }
 
 			select {
 			case <-ctx.Done():

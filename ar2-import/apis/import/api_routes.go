@@ -7,6 +7,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+// does not set cors origin for development
 func corsware(next httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
@@ -36,6 +37,7 @@ func (app *Application) routes() http.Handler {
 
 	router.HandleOPTIONS = true
 
+	// Set handler
 	router.Handle(http.MethodGet, "/import-file/:uploadType/:requestId", corsware(app.getPresignedUrl))
 	router.Handle(http.MethodGet, "/info/health", corsware(app.getHealthInfo))
 	router.Handle(http.MethodGet, "/info/version", corsware(app.getVersionInfo))
