@@ -54,9 +54,12 @@ func NewKafkaReader() *kafka.Reader {
 }
 
 func NewKafkaWriter() *kafka.Writer {
+
 	writer := &kafka.Writer{
-		Addr:  kafka.TCP(os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")),
-		Topic: os.Getenv("KAFKA_SERVICE_TOPIC"),
+		Addr:     kafka.TCP(os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")),
+		Topic:    os.Getenv("KAFKA_SERVICE_TOPIC"),
+		Balancer: &kafka.ReferenceHash{},
 	}
+
 	return writer
 }

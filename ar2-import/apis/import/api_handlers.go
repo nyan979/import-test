@@ -41,9 +41,10 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	var activities workflow.Activities
-	activities.GraphQlClient = app.graphqlClient
-	activities.MinioClient = app.minioClient
+	activities := workflow.Activities{
+		MinioClient:   app.minioClient,
+		GraphQlClient: app.graphqlClient,
+	}
 
 	status, err := activities.IsRequestIdBusy(&requestId)
 	if err != nil {
@@ -62,13 +63,13 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	config, err := activities.ReadConfigTable(uploadType)
+	config, err := activities.ReadConfig(uploadType)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err = activities.InsertConfigRunTimeTable(requestId, string(config[0].Id))
+	err = activities.InsertConfigRunTime(requestId, string(config[0].Id))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -79,6 +80,8 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	RequestId <- requestId
 
 	payload := jsonResponse{
 		PresignedUrl: url.String(),

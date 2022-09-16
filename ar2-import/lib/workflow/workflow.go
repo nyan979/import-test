@@ -19,7 +19,7 @@ type Activities struct {
 	MinioClient   *minio.Client
 	GraphQlClient *graphql.Client
 	KafkaReader   *kafka.Reader
-	KafkaWriter   *kafka.Writer
+	//KafkaWriter   *kafka.Writer
 }
 
 type UploadTypeConfiguration []struct {
@@ -40,7 +40,7 @@ type RunTimeConfiguration []struct {
 	UpdatedAt     graphql.String
 }
 
-type Message struct {
+type MinioMessage struct {
 	EventName string `json:"EventName"`
 	Key       string `json:"Key"`
 	Records   []struct {
@@ -95,7 +95,7 @@ type Message struct {
 	} `json:"Records"`
 }
 
-func (a *Activities) ReadConfigTable(uploadType string) (UploadTypeConfiguration, error) {
+func (a *Activities) ReadConfig(uploadType string) (UploadTypeConfiguration, error) {
 	var q struct {
 		UploadTypeConfiguration `graphql:"import_configuration(where: {uploadType: {_eq: $configUploadType}})"`
 	}
@@ -161,7 +161,7 @@ func (a *Activities) IsRequestIdBusy(requestId *string) (bool, error) {
 	}
 }
 
-func (a *Activities) InsertConfigRunTimeTable(requestId string, configId string) error {
+func (a *Activities) InsertConfigRunTime(requestId string, configId string) error {
 	type import_runtime_insert_input struct {
 		RequestId   string `json:"requestId"`
 		ConfigId    string `json:"configId"`
@@ -193,16 +193,56 @@ func (a *Activities) InsertConfigRunTimeTable(requestId string, configId string)
 	return nil
 }
 
-func (a *Activities) ReadMinioNotification(message kafka.Message) (string, error) {
-	var msg Message
+func (a *Activities) UpdateConfigRunTimeFileVersion(requestId string, version string) error {
+	var mutation struct {
+		UpdateData struct {
+			UpdatedAt graphql.String
+		} `graphql:"update_import_runtime_by_pk(pk_columns: {requestId: $rqId}, _set: {fileVersionId: $verId})"`
+	}
+
+	variables := map[string]interface{}{
+		"rqId":  graphql.String(requestId),
+		"verId": graphql.String(version),
+	}
+
+	if err := a.GraphQlClient.Mutate(context.Background(), &mutation, variables); err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	return nil
+}
+
+func (a *Activities) UpdateConfigRunTimeStatus(requestId string, status string) error {
+	var mutation struct {
+		UpdateData struct {
+			UpdatedAt graphql.String
+		} `graphql:"update_import_runtime_by_pk(pk_columns: {requestId: $rqId}, _set: {status: $status})"`
+	}
+
+	variables := map[string]interface{}{
+		"rqId":   graphql.String(requestId),
+		"status": graphql.String(status),
+	}
+
+	if err := a.GraphQlClient.Mutate(context.Background(), &mutation, variables); err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	return nil
+}
+
+func (a *Activities) ReadMinioNotification(message kafka.Message) (*MinioMessage, error) {
+	var msg MinioMessage
 
 	err := json.Unmarshal(message.Value, &msg)
 	if err != nil {
 		log.Fatalln(err)
-		return "", err
+		return nil, err
 	}
 
-	return msg.Records[0].S3.Object.Key, nil
+	return &msg, nil
 }
 
 func (a *Activities) ParseCSVToLine(filekey string) ([]string, error) {

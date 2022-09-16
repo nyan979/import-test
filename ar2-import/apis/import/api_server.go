@@ -19,8 +19,9 @@ type Application struct {
 	minioClient   *minio.Client
 	graphqlClient *graphql.Client
 	kafkaReader   *kafka.Reader
-	kafkaWriter   *kafka.Writer
 }
+
+var RequestId chan string
 
 func main() {
 	godotenv.Load("../../../.env")
@@ -29,16 +30,16 @@ func main() {
 		minioClient:   utils.SetMinioClient(),
 		graphqlClient: utils.SetGraphqlClient(),
 		kafkaReader:   utils.NewKafkaReader(),
-		kafkaWriter:   utils.NewKafkaWriter(),
 	}
 
-	var activities workflow.Activities
-	activities.MinioClient = app.minioClient
-	activities.GraphQlClient = app.graphqlClient
-	activities.KafkaReader = app.kafkaReader
-	activities.KafkaWriter = app.kafkaWriter
+	activities := workflow.Activities{
+		MinioClient:   app.minioClient,
+		GraphQlClient: app.graphqlClient,
+		KafkaReader:   app.kafkaReader,
+	}
 
 	ctx := context.Background()
+	RequestId = make(chan string, 1000)
 	message := make(chan kafka.Message, 1000)
 	messageCommit := make(chan kafka.Message, 1000)
 
@@ -49,7 +50,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return activities.WriteMessages(ctx, message, messageCommit)
+		return activities.WriteMessages(ctx, message, messageCommit, RequestId)
 	})
 
 	g.Go(func() error {
