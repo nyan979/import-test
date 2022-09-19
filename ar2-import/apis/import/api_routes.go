@@ -13,7 +13,9 @@ func corsware(next httprouter.Handle) httprouter.Handle {
 
 		corsOrigin := os.Getenv("CORS_ALLOW_ORIGIN")
 
-		if len(corsOrigin) > 0 {
+		if len(corsOrigin) == 0 {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		} else {
 			w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
 		}
 
@@ -26,10 +28,10 @@ func (app *Application) routes() http.Handler {
 
 	router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set CORS headers
-		w.Header().Set("Access-Control-Allow-Headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Origin", r.URL.Host)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Accept-Language, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 
 		// Adjust status code to 204
 		w.WriteHeader(http.StatusNoContent)
@@ -38,9 +40,9 @@ func (app *Application) routes() http.Handler {
 	router.HandleOPTIONS = true
 
 	// Set handler
-	router.Handle(http.MethodGet, "/import-file/:uploadType/:requestId", corsware(app.getPresignedUrl))
-	router.Handle(http.MethodGet, "/info/health", corsware(app.getHealthInfo))
-	router.Handle(http.MethodGet, "/info/version", corsware(app.getVersionInfo))
+	router.GET("/import-file/:uploadType/:requestId", app.getPresignedUrl)
+	router.GET("/info/health", corsware(app.getHealthInfo))
+	router.GET("/info/version", app.getVersionInfo)
 
 	return router
 }
