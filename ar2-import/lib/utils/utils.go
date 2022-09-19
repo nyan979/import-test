@@ -28,10 +28,14 @@ func SetMinioClient() *minio.Client {
 }
 
 func SetGraphqlClient() *graphql.Client {
-	dbHost := os.Getenv("HASURA_HOST")
-	dbPort := os.Getenv("HASURA_PORT")
+	// dbHost := os.Getenv("HASURA_HOST")
+	// dbPort := os.Getenv("HASURA_PORT")
 	gqlEndpoint := os.Getenv("GQL_ENDPOINT")
 	adminkey := os.Getenv("HASURA_GRAPHQL_ADMIN_SECRET")
+
+	// TODO: use env variable instead
+	dbHost := "192.168.170.150"
+	dbPort := "18086"
 
 	graphqlURL := "http://" + dbHost + ":" + dbPort + "/" + gqlEndpoint
 
