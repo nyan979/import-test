@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"github.com/hasura/go-graphql-client"
 	"github.com/minio/minio-go"
 	"github.com/segmentio/kafka-go"
+	"go.temporal.io/sdk/client"
+	temporalLog "go.temporal.io/sdk/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -112,4 +115,39 @@ func InitZapLogger() *zap.Logger {
 	}
 
 	return logger
+}
+
+func InitTemporalConnection(logger temporalLog.Logger) (client.Client, error) {
+	var TemporalHostDefault = "localhost"
+	var TemporalPortDefault = "7233"
+	var TemporalNamespaceDefault = "default"
+
+	TemporalHost := os.Getenv("TEMPORAL_HOST")
+
+	if len(TemporalHost) == 0 {
+		TemporalHost = TemporalHostDefault
+		logger.Warn("TEMPORAL_HOST not set, using defaults", "TemporalHost", TemporalHost)
+	}
+
+	TemporalPort := os.Getenv("TEMPORAL_GRPC_PORT")
+
+	if len(TemporalPort) == 0 {
+		TemporalPort = TemporalPortDefault
+		logger.Warn("TEMPORAL_PORT not set, using defaults", "TemporalPort", TemporalPort)
+	}
+
+	TemporalNamespace := os.Getenv("TEMPORAL_NAMESPACE")
+
+	if len(TemporalNamespace) == 0 {
+		TemporalNamespace = TemporalNamespaceDefault
+		logger.Warn("TEMPORAL_NAMESPACE not set, using defaults", "TEMPORAL_NAMESPACE", TemporalNamespace)
+	}
+
+	logger.Info("Temporal Connection Details:", "temporalHost", TemporalHost, "temporalPort", TemporalPort, "temporalNamespace", TemporalNamespace)
+
+	return client.Dial(client.Options{
+		HostPort:  fmt.Sprintf("%v:%v", TemporalHost, TemporalPort),
+		Namespace: TemporalNamespace,
+		Logger:    logger,
+	})
 }
