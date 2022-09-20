@@ -148,7 +148,7 @@ func (a *Activities) IsAnotherUploadRunning(uploadType string, requestId *string
 
 	for _, v := range q.RunTimeConfiguration {
 		if v.Status == "uploading" || v.Status == "importing" {
-			*requestId = string(q.RunTimeConfiguration[0].RequestId)
+			*requestId = string(v.RequestId)
 			return true, nil
 		}
 	}

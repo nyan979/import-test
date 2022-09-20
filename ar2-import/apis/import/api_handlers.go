@@ -25,6 +25,9 @@ func (app *Application) getVersionInfo(w http.ResponseWriter, r *http.Request, _
 		w.WriteHeader(http.StatusOK)
 	}
 	w.Write([]byte(buildVersion))
+
+	// log.Println("Inside Get Version Info")
+	// log.Println(r)
 }
 
 // service health end point
@@ -32,12 +35,18 @@ func (app *Application) getHealthInfo(w http.ResponseWriter, r *http.Request, _ 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Ok"))
+
+	// log.Println("Inside Get Health Info")
+	// log.Println(r)
 }
 
 // to recieve requestId and response with presigned Url
 func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	uploadType := ps.ByName("uploadType")
 	requestId := ps.ByName("requestId")
+
+	// log.Println("Inside PresignedURL")
+	// log.Println(r)
 
 	// invalid request on empty http parameter
 	if requestId == ":requestId" || uploadType == ":uploadType" {
