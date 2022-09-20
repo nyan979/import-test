@@ -40,9 +40,9 @@ func (app *Application) routes() http.Handler {
 	router.HandleOPTIONS = true
 
 	// Set handler
-	router.GET("/import-file/:uploadType/:requestId", app.getPresignedUrl)
+	router.GET("/import-file/:uploadType/:requestId", corsware(app.getPresignedUrl))
 	router.GET("/info/health", corsware(app.getHealthInfo))
-	router.GET("/info/version", app.getVersionInfo)
+	router.GET("/info/version", corsware(app.getVersionInfo))
 
 	return router
 }
