@@ -118,30 +118,30 @@ func InitZapLogger() *zap.Logger {
 }
 
 func InitTemporalConnection(logger temporalLog.Logger) (client.Client, error) {
-	var TemporalHostDefault = "localhost"
-	var TemporalPortDefault = "7233"
-	var TemporalNamespaceDefault = "default"
+	var TemporalHost = "localhost"
+	var TemporalPort = "7233"
+	var TemporalNamespace = "default"
 
-	TemporalHost := os.Getenv("TEMPORAL_HOST")
+	// TemporalHost := os.Getenv("TEMPORAL_HOST")
 
-	if len(TemporalHost) == 0 {
-		TemporalHost = TemporalHostDefault
-		logger.Warn("TEMPORAL_HOST not set, using defaults", "TemporalHost", TemporalHost)
-	}
+	// if len(TemporalHost) == 0 {
+	// 	TemporalHost = TemporalHostDefault
+	// 	logger.Warn("TEMPORAL_HOST not set, using defaults", "TemporalHost", TemporalHost)
+	// }
 
-	TemporalPort := os.Getenv("TEMPORAL_GRPC_PORT")
+	// TemporalPort := os.Getenv("TEMPORAL_GRPC_PORT")
 
-	if len(TemporalPort) == 0 {
-		TemporalPort = TemporalPortDefault
-		logger.Warn("TEMPORAL_PORT not set, using defaults", "TemporalPort", TemporalPort)
-	}
+	// if len(TemporalPort) == 0 {
+	// 	TemporalPort = TemporalPortDefault
+	// 	logger.Warn("TEMPORAL_PORT not set, using defaults", "TemporalPort", TemporalPort)
+	// }
 
-	TemporalNamespace := os.Getenv("TEMPORAL_NAMESPACE")
+	// TemporalNamespace := os.Getenv("TEMPORAL_NAMESPACE")
 
-	if len(TemporalNamespace) == 0 {
-		TemporalNamespace = TemporalNamespaceDefault
-		logger.Warn("TEMPORAL_NAMESPACE not set, using defaults", "TEMPORAL_NAMESPACE", TemporalNamespace)
-	}
+	// if len(TemporalNamespace) == 0 {
+	// 	TemporalNamespace = TemporalNamespaceDefault
+	// 	logger.Warn("TEMPORAL_NAMESPACE not set, using defaults", "TEMPORAL_NAMESPACE", TemporalNamespace)
+	// }
 
 	logger.Info("Temporal Connection Details:", "temporalHost", TemporalHost, "temporalPort", TemporalPort, "temporalNamespace", TemporalNamespace)
 

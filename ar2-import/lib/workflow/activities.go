@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"log"
-	"net/url"
 	"os"
 	"time"
 
@@ -20,7 +18,7 @@ type Activities struct {
 	GraphqlClient *graphql.Client
 	KafkaReader   *kafka.Reader
 	KafkaWriter   *kafka.Writer
-	RequestId     string
+	// RequestId     string
 }
 
 var activities Activities
@@ -113,25 +111,24 @@ func (a *Activities) ReadConfig(uploadType string) (UploadTypeConfiguration, err
 	}
 
 	if len(q.UploadTypeConfiguration) == 0 {
-		s := "There is no " + uploadType + " configuration."
-		return nil, errors.New(s)
+		return nil, nil
 	}
 
 	return q.UploadTypeConfiguration, nil
 }
 
-func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (*url.URL, error) {
+func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (string, error) {
 	presignedURL, err := a.MinioClient.PresignedPutObject(os.Getenv("MINIO_BUCKET_NAME"), string(config[0].FileKey)+".csv",
 		time.Duration(config[0].UploadExpiryDurationInSec)*time.Second)
 	if err != nil {
 		log.Fatalln(err)
-		return nil, err
+		return "", err
 	}
 
-	return presignedURL, nil
+	return presignedURL.String(), nil
 }
 
-func (a *Activities) IsAnotherUploadRunning(uploadType string, requestId *string) (bool, error) {
+func (a *Activities) IsAnotherUploadRunning(uploadType string) (string, error) {
 	var q struct {
 		RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {uploadType: {_eq: $uploadType}}}, distinct_on: status)"`
 	}
@@ -141,21 +138,16 @@ func (a *Activities) IsAnotherUploadRunning(uploadType string, requestId *string
 	}
 
 	if err := a.GraphqlClient.Query(context.Background(), &q, variables); err != nil {
-		return false, err
-	}
-
-	if len(q.RunTimeConfiguration) == 0 {
-		return false, nil
+		return "", err
 	}
 
 	for _, v := range q.RunTimeConfiguration {
 		if v.Status == "uploading" || v.Status == "importing" {
-			*requestId = string(v.RequestId)
-			return true, nil
+			return string(v.RequestId), nil
 		}
 	}
 
-	return false, nil
+	return "", nil
 }
 
 func (a *Activities) InsertConfigRunTime(requestId string, configId string) error {

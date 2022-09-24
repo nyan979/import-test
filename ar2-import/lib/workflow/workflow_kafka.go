@@ -38,7 +38,7 @@ func (a *Activities) WriteMessages(ctx context.Context, messages <-chan kafka.Me
 		case <-ctx.Done():
 			return ctx.Err()
 		case msg := <-messages:
-			requestId := a.RequestId
+			requestId := "a.RequestId"
 			minioMsg, err := a.ReadMinioNotification(msg)
 			if err != nil {
 				a.UpdateConfigRunTimeStatus(requestId, "failed")
