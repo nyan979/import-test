@@ -4,15 +4,18 @@ import (
 	"log"
 	"time"
 
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
 type ImportMessage struct {
 	RequestID  string
 	UploadType string
+	FileKey    string
 	Config     UploadTypeConfiguration
 	RunConfig  RunTimeConfiguration
 	URL        string
+	Record     []string
 }
 
 type ImportStatus struct {
@@ -21,13 +24,24 @@ type ImportStatus struct {
 }
 
 func ImportServiceWorkflow(ctx workflow.Context) error {
+	retrypolicy := &temporal.RetryPolicy{
+		// InitialInterval:        time.Second,
+		// BackoffCoefficient:     2.0,
+		// MaximumInterval:        time.Second * 100,
+		MaximumAttempts: 1,
+		// NonRetryableErrorTypes: []string{},
+	}
+
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
+		RetryPolicy:         retrypolicy,
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
 	var status *ImportStatus
 	var workflowId string
+
+	log.Println("Start Workflow 1")
 
 	for {
 		workflowId, status = ReceiveRequest(ctx)
@@ -64,6 +78,8 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 		break
 	}
 
+	log.Println("Start Workflow 2")
+
 	for {
 		workflowId, status = ReceiveRequest(ctx)
 
@@ -95,6 +111,8 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 		}
 		break
 	}
+
+	log.Println("Start Workflow 3")
 
 	for {
 		workflowId, status = ReceiveRequest(ctx)
@@ -132,6 +150,51 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 	if err != nil {
 		return err
 	}
+
+	log.Println("Start Workflow 4")
+
+	for {
+		workflowId, status = ReceiveRequest(ctx)
+
+		err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeFileVersion, status.Message.RunConfig).Get(ctx, nil)
+		if err != nil {
+			err := SendErrorResponse(ctx, workflowId, err)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeStatus, "Importing").Get(ctx, nil)
+		if err != nil {
+			err := SendErrorResponse(ctx, workflowId, err)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		err = workflow.ExecuteActivity(ctx, activities.ParseCSVToLine, status.Message.FileKey).Get(ctx, &status.Message.Record)
+		if err != nil {
+			err := SendErrorResponse(ctx, workflowId, err)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		status.Stage = "Parsed CSV content"
+		err = SendResponse(ctx, workflowId, *status)
+		if err != nil {
+			err := SendErrorResponse(ctx, workflowId, err)
+			if err != nil {
+				return err
+			}
+		}
+		break
+	}
+
+	log.Println("End of workflow")
 
 	return nil
 }

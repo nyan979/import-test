@@ -16,8 +16,6 @@ import (
 type Activities struct {
 	MinioClient   *minio.Client
 	GraphqlClient *graphql.Client
-	KafkaReader   *kafka.Reader
-	KafkaWriter   *kafka.Writer
 	// RequestId     string
 }
 
@@ -117,8 +115,37 @@ func (a *Activities) ReadConfig(uploadType string) (UploadTypeConfiguration, err
 	return q.UploadTypeConfiguration, nil
 }
 
+func (a *Activities) GetRuntimeConfig(filename string) (RunTimeConfiguration, error) {
+	var q struct {
+		RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {fileKey: {_eq: $fileKey}}, status: {_eq: $status}})"`
+	}
+
+	variables := map[string]interface{}{
+		"fileKey": graphql.String(filename),
+		"status":  graphql.String("uploading"),
+	}
+
+	log.Printf("FILE NAME IS %s", filename)
+
+	if err := a.GraphqlClient.Query(context.Background(), &q, variables); err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+
+	log.Println("Run Tim config inside")
+
+	if len(q.RunTimeConfiguration) == 0 {
+		log.Println("Empty RUn Time")
+		return nil, nil
+	}
+
+	log.Println(q)
+
+	return q.RunTimeConfiguration, nil
+}
+
 func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (string, error) {
-	presignedURL, err := a.MinioClient.PresignedPutObject(os.Getenv("MINIO_BUCKET_NAME"), string(config[0].FileKey)+".csv",
+	presignedURL, err := a.MinioClient.PresignedPutObject(os.Getenv("MINIO_BUCKET_NAME"), string(config[0].FileKey),
 		time.Duration(config[0].UploadExpiryDurationInSec)*time.Second)
 	if err != nil {
 		log.Fatalln(err)
@@ -160,8 +187,8 @@ func (a *Activities) InsertConfigRunTime(requestId string, configId string) erro
 
 	var mutation struct {
 		InsertData struct {
-			CreatedAt graphql.String
-			UpdatedAt graphql.String
+			CreatedAt string
+			UpdatedAt string
 		} `graphql:"insert_import_runtime_one(object: $object)"`
 	}
 
@@ -182,16 +209,16 @@ func (a *Activities) InsertConfigRunTime(requestId string, configId string) erro
 	return nil
 }
 
-func (a *Activities) UpdateConfigRunTimeFileVersion(requestId string, version string) error {
+func (a *Activities) UpdateConfigRunTimeFileVersion(runConfig RunTimeConfiguration) error {
 	var mutation struct {
 		UpdateData struct {
-			UpdatedAt graphql.String
+			UpdatedAt string
 		} `graphql:"update_import_runtime_by_pk(pk_columns: {requestId: $rqId}, _set: {fileVersionId: $verId})"`
 	}
 
 	variables := map[string]interface{}{
-		"rqId":  graphql.String(requestId),
-		"verId": graphql.String(version),
+		"rqId":  runConfig[0].RequestId,
+		"verId": runConfig[0].FileVersionId,
 	}
 
 	if err := a.GraphqlClient.Mutate(context.Background(), &mutation, variables); err != nil {
@@ -205,7 +232,7 @@ func (a *Activities) UpdateConfigRunTimeFileVersion(requestId string, version st
 func (a *Activities) UpdateConfigRunTimeStatus(requestId string, status string) error {
 	var mutation struct {
 		UpdateData struct {
-			UpdatedAt graphql.String
+			UpdatedAt string
 		} `graphql:"update_import_runtime_by_pk(pk_columns: {requestId: $rqId}, _set: {status: $status})"`
 	}
 

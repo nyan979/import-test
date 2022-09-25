@@ -43,7 +43,6 @@ func main() {
 		activities: workflow.Activities{
 			MinioClient:   utils.SetMinioClient(),
 			GraphqlClient: utils.SetGraphqlClient(),
-			// RequestId:     "",
 		},
 	}
 
@@ -56,17 +55,17 @@ func main() {
 
 	// fetch minio notification message go routine
 	g.Go(func() error {
-		return app.activities.FetchMessage(ctx, message)
+		return app.FetchMessage(ctx, message)
 	})
 
 	// write csv content to kafka topic go routine
 	g.Go(func() error {
-		return app.activities.WriteMessages(ctx, message, messageCommit /*, RequestId*/)
+		return app.WriteMessages(ctx, message, messageCommit /*, RequestId*/)
 	})
 
 	// commit to offset minio notification messages go routine
 	g.Go(func() error {
-		return app.activities.CommitMessages(ctx, messageCommit)
+		return app.CommitMessages(ctx, messageCommit)
 	})
 
 	// set and serve on port

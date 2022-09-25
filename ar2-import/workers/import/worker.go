@@ -33,8 +33,6 @@ func main() {
 	w.RegisterActivity(&workflow.Activities{
 		MinioClient:   utils.SetMinioClient(),
 		GraphqlClient: utils.SetGraphqlClient(),
-		KafkaReader:   utils.NewKafkaReader(),
-		KafkaWriter:   utils.NewKafkaWriter(),
 	})
 
 	err = w.Run(worker.InterruptCh())

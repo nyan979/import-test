@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 	"net/http"
 	"os"
 
@@ -52,7 +54,7 @@ func NewKafkaReader() *kafka.Reader {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")},
 		Topic:   os.Getenv("KAFKA_IMPORT_TOPIC"),
-		GroupID: "minio-consumer-group-1",
+		GroupID: "testing",
 	})
 
 	return reader
@@ -150,4 +152,39 @@ func InitTemporalConnection(logger temporalLog.Logger) (client.Client, error) {
 		Namespace: TemporalNamespace,
 		Logger:    logger,
 	})
+}
+
+func CreateImportWorkflow(c client.Client, status *workflow.ImportStatus) (*workflow.ImportStatus, error) {
+	workflowOptions := client.StartWorkflowOptions{
+		TaskQueue: "import-service",
+		ID:        status.Message.RequestID,
+	}
+	ctx := context.Background()
+
+	we, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.ImportServiceWorkflow)
+	if err != nil {
+		return status, fmt.Errorf("unable to execute order workflow: %w", err)
+	}
+
+	status.Message.RequestID = we.GetID()
+
+	return status, nil
+}
+
+func UpdateWorkflow(c client.Client, requestId string, status *workflow.ImportStatus) (*workflow.ImportStatus, error) {
+	workflowOptions := client.StartWorkflowOptions{
+		TaskQueue: "import-service",
+	}
+	ctx := context.Background()
+
+	we, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.SignalImportServiceWorkflow, requestId, status)
+	if err != nil {
+		return status, fmt.Errorf("unable to execute workflow: %w", err)
+	}
+	err = we.Get(ctx, &status)
+	if err != nil {
+		return status, err
+	}
+
+	return status, nil
 }
