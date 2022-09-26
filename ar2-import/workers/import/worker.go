@@ -30,6 +30,7 @@ func main() {
 
 	w.RegisterWorkflow(workflow.ImportServiceWorkflow)
 	w.RegisterWorkflow(workflow.SignalImportServiceWorkflow)
+	w.RegisterWorkflow(workflow.WaitForMinioNotification)
 	w.RegisterActivity(&workflow.Activities{
 		MinioClient:   utils.SetMinioClient(),
 		GraphqlClient: utils.SetGraphqlClient(),

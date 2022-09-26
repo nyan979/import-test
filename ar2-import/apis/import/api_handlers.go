@@ -60,7 +60,7 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		},
 	}
 
-	status, err := utils.CreateImportWorkflow(app.temporalClient, status)
+	err := utils.CreateImportWorkflow(app.temporalClient, status)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -84,20 +84,8 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	status, err = utils.UpdateWorkflow(app.temporalClient, requestId, status)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	if status.Stage == "Upload type config not found" {
 		http.Error(w, "No such upload type configuration", http.StatusBadRequest)
-		return
-	}
-
-	status, err = utils.UpdateWorkflow(app.temporalClient, requestId, status)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

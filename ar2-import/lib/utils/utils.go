@@ -7,6 +7,7 @@ import (
 	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/minio/minio-go"
@@ -154,21 +155,20 @@ func InitTemporalConnection(logger temporalLog.Logger) (client.Client, error) {
 	})
 }
 
-func CreateImportWorkflow(c client.Client, status *workflow.ImportStatus) (*workflow.ImportStatus, error) {
+func CreateImportWorkflow(c client.Client, status *workflow.ImportStatus) error {
 	workflowOptions := client.StartWorkflowOptions{
-		TaskQueue: "import-service",
-		ID:        status.Message.RequestID,
+		TaskQueue:          "import-service",
+		ID:                 status.Message.RequestID,
+		WorkflowRunTimeout: time.Second * 10,
 	}
 	ctx := context.Background()
 
-	we, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.ImportServiceWorkflow)
+	_, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.ImportServiceWorkflow)
 	if err != nil {
-		return status, fmt.Errorf("unable to execute order workflow: %w", err)
+		return fmt.Errorf("unable to execute order workflow: %w", err)
 	}
 
-	status.Message.RequestID = we.GetID()
-
-	return status, nil
+	return nil
 }
 
 func UpdateWorkflow(c client.Client, requestId string, status *workflow.ImportStatus) (*workflow.ImportStatus, error) {

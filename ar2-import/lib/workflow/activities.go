@@ -3,20 +3,17 @@ package workflow
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"log"
 	"os"
 	"time"
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/minio/minio-go"
-	"github.com/segmentio/kafka-go"
 )
 
 type Activities struct {
 	MinioClient   *minio.Client
 	GraphqlClient *graphql.Client
-	// RequestId     string
 }
 
 var activities Activities
@@ -249,18 +246,6 @@ func (a *Activities) UpdateConfigRunTimeStatus(requestId string, status string) 
 	return nil
 }
 
-func (a *Activities) ReadMinioNotification(message kafka.Message) (*MinioMessage, error) {
-	var msg MinioMessage
-
-	err := json.Unmarshal(message.Value, &msg)
-	if err != nil {
-		log.Fatalln(err)
-		return nil, err
-	}
-
-	return &msg, nil
-}
-
 func (a *Activities) ParseCSVToLine(filekey string) ([]string, error) {
 	object, err := a.MinioClient.GetObject(os.Getenv("MINIO_BUCKET_NAME"), filekey, minio.GetObjectOptions{})
 	if err != nil {
@@ -277,3 +262,16 @@ func (a *Activities) ParseCSVToLine(filekey string) ([]string, error) {
 
 	return lines, nil
 }
+
+// Deprecated. To Be Deleted
+// func (a *Activities) ReadMinioNotification(message kafka.Message) (*MinioMessage, error) {
+// 	var msg MinioMessage
+
+// 	err := json.Unmarshal(message.Value, &msg)
+// 	if err != nil {
+// 		log.Fatalln(err)
+// 		return nil, err
+// 	}
+
+// 	return &msg, nil
+// }

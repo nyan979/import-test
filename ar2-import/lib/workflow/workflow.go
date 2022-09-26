@@ -38,36 +38,22 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	var status *ImportStatus
-	var workflowId string
-
 	log.Println("Start Workflow 1")
 
-	for {
-		workflowId, status = ReceiveRequest(ctx)
-		var newRequestId string
+	workflowId, status := ReceiveRequest(ctx)
+	var newRequestId string
 
-		err := workflow.ExecuteActivity(ctx, activities.IsAnotherUploadRunning, status.Message.UploadType).Get(ctx, &newRequestId)
+	err := workflow.ExecuteActivity(ctx, activities.IsAnotherUploadRunning, status.Message.UploadType).Get(ctx, &newRequestId)
+	if err != nil {
+		err := SendErrorResponse(ctx, workflowId, err)
 		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
-			continue
+			return err
 		}
+	}
 
-		if len(newRequestId) > 0 {
-			status.Message.RequestID = newRequestId
-			status.Stage = "Service not available"
-			err = SendResponse(ctx, workflowId, *status)
-			if err != nil {
-				err := SendErrorResponse(ctx, workflowId, err)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}
+	if len(newRequestId) > 0 {
+		status.Message.RequestID = newRequestId
+		status.Stage = "Service not available"
 		err = SendResponse(ctx, workflowId, *status)
 		if err != nil {
 			err := SendErrorResponse(ctx, workflowId, err)
@@ -75,33 +61,19 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 				return err
 			}
 		}
-		break
+		return nil
 	}
 
-	log.Println("Start Workflow 2")
-
-	for {
-		workflowId, status = ReceiveRequest(ctx)
-
-		err := workflow.ExecuteActivity(ctx, activities.ReadConfig, status.Message.UploadType).Get(ctx, &status.Message.Config)
+	err = workflow.ExecuteActivity(ctx, activities.ReadConfig, status.Message.UploadType).Get(ctx, &status.Message.Config)
+	if err != nil {
+		err := SendErrorResponse(ctx, workflowId, err)
 		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
-			continue
+			return err
 		}
-		if status.Message.Config == nil {
-			status.Stage = "Upload type config not found"
-			err = SendResponse(ctx, workflowId, *status)
-			if err != nil {
-				err := SendErrorResponse(ctx, workflowId, err)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}
+	}
+
+	if status.Message.Config == nil {
+		status.Stage = "Upload type config not found"
 		err = SendResponse(ctx, workflowId, *status)
 		if err != nil {
 			err := SendErrorResponse(ctx, workflowId, err)
@@ -109,94 +81,91 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 				return err
 			}
 		}
-		break
+		return nil
 	}
 
-	log.Println("Start Workflow 3")
-
-	for {
-		workflowId, status = ReceiveRequest(ctx)
-
-		err := workflow.ExecuteActivity(ctx, activities.GetPresignedUrl, status.Message.Config).Get(ctx, &status.Message.URL)
+	err = workflow.ExecuteActivity(ctx, activities.GetPresignedUrl, status.Message.Config).Get(ctx, &status.Message.URL)
+	if err != nil {
+		err := SendErrorResponse(ctx, workflowId, err)
 		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
-			continue
+			return err
 		}
-		if len(status.Message.URL) == 0 {
-			err = SendResponse(ctx, workflowId, *status)
-			if err != nil {
-				err := SendErrorResponse(ctx, workflowId, err)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-		status.Stage = "Presigned Url"
-		err = SendResponse(ctx, workflowId, *status)
-		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
-		}
-		break
 	}
 
-	err := workflow.ExecuteActivity(ctx, activities.InsertConfigRunTime, status.Message.RequestID, status.Message.Config[0].Id).Get(ctx, nil)
+	status.Stage = "Presigned Url"
+
+	err = SendResponse(ctx, workflowId, *status)
+	if err != nil {
+		err := SendErrorResponse(ctx, workflowId, err)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = workflow.ExecuteActivity(ctx, activities.InsertConfigRunTime, status.Message.RequestID, status.Message.Config[0].Id).Get(ctx, nil)
 	if err != nil {
 		return err
 	}
 
-	log.Println("Start Workflow 4")
+	log.Println("Start Workflow 2")
 
-	for {
-		workflowId, status = ReceiveRequest(ctx)
+	cwo := workflow.ChildWorkflowOptions{
+		WorkflowID:         status.Message.RequestID + "-child",
+		WorkflowRunTimeout: 10 * time.Second,
+	}
 
-		err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeFileVersion, status.Message.RunConfig).Get(ctx, nil)
+	ctx = workflow.WithChildOptions(ctx, cwo)
+
+	future := workflow.ExecuteChildWorkflow(ctx, WaitForMinioNotification, status)
+
+	log.Println(future)
+
+	err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeFileVersion, status.Message.RunConfig).Get(ctx, nil)
+	if err != nil {
+		err := SendErrorResponse(ctx, workflowId, err)
 		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
-			continue
+			return err
 		}
+	}
 
-		err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeStatus, "Importing").Get(ctx, nil)
-		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
-			continue
-		}
+	log.Println("Outside Session")
 
-		err = workflow.ExecuteActivity(ctx, activities.ParseCSVToLine, status.Message.FileKey).Get(ctx, &status.Message.Record)
+	err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeStatus, "Importing").Get(ctx, nil)
+	if err != nil {
+		err := SendErrorResponse(ctx, workflowId, err)
 		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
-			continue
+			return err
 		}
+	}
 
-		status.Stage = "Parsed CSV content"
-		err = SendResponse(ctx, workflowId, *status)
+	err = workflow.ExecuteActivity(ctx, activities.ParseCSVToLine, status.Message.FileKey).Get(ctx, &status.Message.Record)
+	if err != nil {
+		err := SendErrorResponse(ctx, workflowId, err)
 		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
+			return err
 		}
-		break
+	}
+
+	status.Stage = "Parsed CSV content"
+	err = SendResponse(ctx, workflowId, *status)
+	if err != nil {
+		err := SendErrorResponse(ctx, workflowId, err)
+		if err != nil {
+			return err
+		}
 	}
 
 	log.Println("End of workflow")
 
 	return nil
+}
+
+func WaitForMinioNotification(ctx workflow.Context) (*ImportStatus, error) {
+	_, status := ReceiveRequest(ctx)
+
+	log.Println("Inside Session")
+
+	return status, nil
 }
 
 func SignalImportServiceWorkflow(ctx workflow.Context, orderWorkflowID string, status *ImportStatus) (*ImportStatus, error) {
