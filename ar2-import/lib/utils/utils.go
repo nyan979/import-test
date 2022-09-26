@@ -7,7 +7,6 @@ import (
 	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/minio/minio-go"
@@ -125,27 +124,6 @@ func InitTemporalConnection(logger temporalLog.Logger) (client.Client, error) {
 	var TemporalPort = "7233"
 	var TemporalNamespace = "default"
 
-	// TemporalHost := os.Getenv("TEMPORAL_HOST")
-
-	// if len(TemporalHost) == 0 {
-	// 	TemporalHost = TemporalHostDefault
-	// 	logger.Warn("TEMPORAL_HOST not set, using defaults", "TemporalHost", TemporalHost)
-	// }
-
-	// TemporalPort := os.Getenv("TEMPORAL_GRPC_PORT")
-
-	// if len(TemporalPort) == 0 {
-	// 	TemporalPort = TemporalPortDefault
-	// 	logger.Warn("TEMPORAL_PORT not set, using defaults", "TemporalPort", TemporalPort)
-	// }
-
-	// TemporalNamespace := os.Getenv("TEMPORAL_NAMESPACE")
-
-	// if len(TemporalNamespace) == 0 {
-	// 	TemporalNamespace = TemporalNamespaceDefault
-	// 	logger.Warn("TEMPORAL_NAMESPACE not set, using defaults", "TEMPORAL_NAMESPACE", TemporalNamespace)
-	// }
-
 	logger.Info("Temporal Connection Details:", "temporalHost", TemporalHost, "temporalPort", TemporalPort, "temporalNamespace", TemporalNamespace)
 
 	return client.Dial(client.Options{
@@ -157,9 +135,8 @@ func InitTemporalConnection(logger temporalLog.Logger) (client.Client, error) {
 
 func CreateImportWorkflow(c client.Client, status *workflow.ImportStatus) error {
 	workflowOptions := client.StartWorkflowOptions{
-		TaskQueue:          "import-service",
-		ID:                 status.Message.RequestID,
-		WorkflowRunTimeout: time.Second * 10,
+		TaskQueue: "import-service",
+		ID:        status.Message.RequestID,
 	}
 	ctx := context.Background()
 

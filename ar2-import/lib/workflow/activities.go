@@ -112,35 +112,6 @@ func (a *Activities) ReadConfig(uploadType string) (UploadTypeConfiguration, err
 	return q.UploadTypeConfiguration, nil
 }
 
-func (a *Activities) GetRuntimeConfig(filename string) (RunTimeConfiguration, error) {
-	var q struct {
-		RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {fileKey: {_eq: $fileKey}}, status: {_eq: $status}})"`
-	}
-
-	variables := map[string]interface{}{
-		"fileKey": graphql.String(filename),
-		"status":  graphql.String("uploading"),
-	}
-
-	log.Printf("FILE NAME IS %s", filename)
-
-	if err := a.GraphqlClient.Query(context.Background(), &q, variables); err != nil {
-		log.Fatal(err)
-		return nil, err
-	}
-
-	log.Println("Run Tim config inside")
-
-	if len(q.RunTimeConfiguration) == 0 {
-		log.Println("Empty RUn Time")
-		return nil, nil
-	}
-
-	log.Println(q)
-
-	return q.RunTimeConfiguration, nil
-}
-
 func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (string, error) {
 	presignedURL, err := a.MinioClient.PresignedPutObject(os.Getenv("MINIO_BUCKET_NAME"), string(config[0].FileKey),
 		time.Duration(config[0].UploadExpiryDurationInSec)*time.Second)
@@ -238,10 +209,14 @@ func (a *Activities) UpdateConfigRunTimeStatus(requestId string, status string) 
 		"status": graphql.String(status),
 	}
 
+	log.Println(variables)
+
 	if err := a.GraphqlClient.Mutate(context.Background(), &mutation, variables); err != nil {
 		log.Fatal(err)
 		return err
 	}
+
+	log.Println(mutation)
 
 	return nil
 }
@@ -262,16 +237,3 @@ func (a *Activities) ParseCSVToLine(filekey string) ([]string, error) {
 
 	return lines, nil
 }
-
-// Deprecated. To Be Deleted
-// func (a *Activities) ReadMinioNotification(message kafka.Message) (*MinioMessage, error) {
-// 	var msg MinioMessage
-
-// 	err := json.Unmarshal(message.Value, &msg)
-// 	if err != nil {
-// 		log.Fatalln(err)
-// 		return nil, err
-// 	}
-
-// 	return &msg, nil
-// }

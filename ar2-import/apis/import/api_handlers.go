@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"mssfoobar/ar2-import/ar2-import/lib/utils"
 	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 	"net/http"
@@ -72,32 +71,21 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	if status.Stage == "Service not available" {
-		log.Println("Inside another upload running")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		payload := jsonResponse{
-			RequestId: status.Message.RequestID,
-		}
-		jsonPayload, _ := json.Marshal(payload)
-		w.Write(jsonPayload)
-		return
-	}
+	var payload any
 
-	if status.Stage == "Upload type config not found" {
+	switch status.Stage {
+	case "Upload type config not found":
 		http.Error(w, "No such upload type configuration", http.StatusBadRequest)
 		return
-	}
-
-	var url string
-
-	if status.Stage == "Presigned Url" {
-		url = status.Message.URL
-	}
-
-	payload := jsonResponse{
-		PresignedUrl: url,
-		RequestId:    requestId,
+	case "Service not available":
+		payload = jsonResponse{
+			RequestId: status.Message.RequestID,
+		}
+	case "Presigned Url":
+		payload = jsonResponse{
+			PresignedUrl: status.Message.URL,
+			RequestId:    requestId,
+		}
 	}
 
 	jsonPayload, _ := json.Marshal(payload)

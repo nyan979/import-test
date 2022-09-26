@@ -103,13 +103,10 @@ func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka
 				return err
 			}
 
-			filename := minioMsg.Records[0].S3.Object.Key
-
 			status := &workflow.ImportStatus{}
+			status.Message.FileKey = minioMsg.Records[0].S3.Object.Key
 
-			status.Message.FileKey = filename
-
-			status.Message.RunConfig, err = app.activities.GetRuntimeConfig(filename)
+			status.Message.RunConfig, status.Message.Config, err = app.GetRuntimeConfig(status.Message.FileKey)
 			if err != nil {
 				return err
 			}
@@ -163,4 +160,39 @@ func (app *Application) CommitMessages(ctx context.Context, messagesCommit <-cha
 			log.Printf("committed an msg: %v \n", string(msg.Value))
 		}
 	}
+}
+
+func (app *Application) GetRuntimeConfig(filename string) (workflow.RunTimeConfiguration, workflow.UploadTypeConfiguration, error) {
+	var q1 struct {
+		workflow.RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {fileKey: {_eq: $fileKey}}, status: {_eq: $status}})"`
+	}
+
+	variables := map[string]interface{}{
+		"fileKey": graphql.String(filename),
+		"status":  graphql.String("uploading"),
+	}
+
+	if err := app.activities.GraphqlClient.Query(context.Background(), &q1, variables); err != nil {
+		log.Fatal(err)
+		return nil, nil, err
+	}
+
+	var q2 struct {
+		workflow.UploadTypeConfiguration `graphql:"import_configuration(where: {fileKey: {_eq: $fileKey}})"`
+	}
+
+	variables = map[string]interface{}{
+		"fileKey": graphql.String(filename),
+	}
+
+	if err := app.activities.GraphqlClient.Query(context.Background(), &q2, variables); err != nil {
+		log.Fatal(err)
+		return nil, nil, err
+	}
+
+	if len(q1.RunTimeConfiguration) == 0 || len(q2.UploadTypeConfiguration) == 0 {
+		return nil, nil, nil
+	}
+
+	return q1.RunTimeConfiguration, q2.UploadTypeConfiguration, nil
 }

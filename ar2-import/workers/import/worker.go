@@ -22,15 +22,10 @@ func main() {
 
 	defer temporalClient.Close()
 
-	// workerOptions := worker.Options{
-	// 	EnableSessionWorker: true,
-	// }
-
 	w := worker.New(temporalClient, "import-service", worker.Options{})
 
 	w.RegisterWorkflow(workflow.ImportServiceWorkflow)
 	w.RegisterWorkflow(workflow.SignalImportServiceWorkflow)
-	w.RegisterWorkflow(workflow.WaitForMinioNotification)
 	w.RegisterActivity(&workflow.Activities{
 		MinioClient:   utils.SetMinioClient(),
 		GraphqlClient: utils.SetGraphqlClient(),

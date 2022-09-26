@@ -25,30 +25,21 @@ type ImportStatus struct {
 
 func ImportServiceWorkflow(ctx workflow.Context) error {
 	retrypolicy := &temporal.RetryPolicy{
-		// InitialInterval:        time.Second,
-		// BackoffCoefficient:     2.0,
-		// MaximumInterval:        time.Second * 100,
 		MaximumAttempts: 1,
-		// NonRetryableErrorTypes: []string{},
 	}
 
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 5 * time.Second,
+		StartToCloseTimeout: 10 * time.Minute,
 		RetryPolicy:         retrypolicy,
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
-
-	log.Println("Start Workflow 1")
 
 	workflowId, status := ReceiveRequest(ctx)
 	var newRequestId string
 
 	err := workflow.ExecuteActivity(ctx, activities.IsAnotherUploadRunning, status.Message.UploadType).Get(ctx, &newRequestId)
 	if err != nil {
-		err := SendErrorResponse(ctx, workflowId, err)
-		if err != nil {
-			return err
-		}
+		return err
 	}
 
 	if len(newRequestId) > 0 {
@@ -66,20 +57,14 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 
 	err = workflow.ExecuteActivity(ctx, activities.ReadConfig, status.Message.UploadType).Get(ctx, &status.Message.Config)
 	if err != nil {
-		err := SendErrorResponse(ctx, workflowId, err)
-		if err != nil {
-			return err
-		}
+		return err
 	}
 
 	if status.Message.Config == nil {
 		status.Stage = "Upload type config not found"
 		err = SendResponse(ctx, workflowId, *status)
 		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
+			return err
 		}
 		return nil
 	}
@@ -93,13 +78,9 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 	}
 
 	status.Stage = "Presigned Url"
-
 	err = SendResponse(ctx, workflowId, *status)
 	if err != nil {
-		err := SendErrorResponse(ctx, workflowId, err)
-		if err != nil {
-			return err
-		}
+		return err
 	}
 
 	err = workflow.ExecuteActivity(ctx, activities.InsertConfigRunTime, status.Message.RequestID, status.Message.Config[0].Id).Get(ctx, nil)
@@ -107,30 +88,21 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 		return err
 	}
 
-	log.Println("Start Workflow 2")
+	var statusNew *ImportStatus
 
-	cwo := workflow.ChildWorkflowOptions{
-		WorkflowID:         status.Message.RequestID + "-child",
-		WorkflowRunTimeout: 10 * time.Second,
-	}
-
-	ctx = workflow.WithChildOptions(ctx, cwo)
-
-	future := workflow.ExecuteChildWorkflow(ctx, WaitForMinioNotification, status)
-
-	log.Println(future)
-
-	err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeFileVersion, status.Message.RunConfig).Get(ctx, nil)
-	if err != nil {
-		err := SendErrorResponse(ctx, workflowId, err)
+	_, statusNew = ReceiveRequestWithTimeOut(ctx)
+	if statusNew == nil {
+		err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeStatus, status.Message.RequestID, "failed").Get(ctx, nil)
 		if err != nil {
-			return err
+			err := SendErrorResponse(ctx, workflowId, err)
+			if err != nil {
+				return err
+			}
 		}
+		return nil
 	}
 
-	log.Println("Outside Session")
-
-	err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeStatus, "Importing").Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeStatus, status.Message.RequestID, "importing").Get(ctx, nil)
 	if err != nil {
 		err := SendErrorResponse(ctx, workflowId, err)
 		if err != nil {
@@ -158,14 +130,6 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 	log.Println("End of workflow")
 
 	return nil
-}
-
-func WaitForMinioNotification(ctx workflow.Context) (*ImportStatus, error) {
-	_, status := ReceiveRequest(ctx)
-
-	log.Println("Inside Session")
-
-	return status, nil
 }
 
 func SignalImportServiceWorkflow(ctx workflow.Context, orderWorkflowID string, status *ImportStatus) (*ImportStatus, error) {

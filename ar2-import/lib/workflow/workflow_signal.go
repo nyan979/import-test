@@ -2,6 +2,8 @@ package workflow
 
 import (
 	"fmt"
+	"log"
+	"time"
 
 	"go.temporal.io/sdk/workflow"
 )
@@ -98,6 +100,26 @@ func ReceiveRequest(ctx workflow.Context) (string, *ImportStatus) {
 	ch.Receive(ctx, &req)
 
 	logger.Info("Received request")
+
+	return req.CallingWorkflowId, &req.Status
+}
+
+func ReceiveRequestWithTimeOut(ctx workflow.Context) (string, *ImportStatus) {
+	logger := workflow.GetLogger(ctx)
+
+	var req signalRequest
+
+	ch := workflow.GetSignalChannel(ctx, requestSignalName)
+
+	logger.Info("Waiting for request with timeout")
+
+	ok, more := ch.ReceiveWithTimeout(ctx, time.Second*10, &req)
+	if !ok && more {
+		log.Println("REQUEST TIMEOUT")
+		return "", nil
+	}
+
+	logger.Info("Received request within timeout duration")
 
 	return req.CallingWorkflowId, &req.Status
 }
