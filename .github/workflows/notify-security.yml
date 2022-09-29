@@ -1,0 +1,21 @@
+name: 'ar2-import - Check and notify vulnerabilities'
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 0 * * 1'
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      # X.X.X - Latest version available at: https://github.com/kunalnagarco/action-cve/releases
+      - uses: kunalnagarco/action-cve@v1.7.12
+        with:
+          token: ${{ secrets.PAT }}
+          slack_webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # pager_duty_integration_key: ${{ secrets.PAGER_DUTY_INTEGRATION_KEY }}
+          # zenduty_api_key: ${{ secrets.ZENDUTY_API_KEY }}
+          # zenduty_service_id: ${{ secrets.ZENDUTY_SERVICE_ID }}
+          # zenduty_escalation_policy_id: ${{ secrets.ZENDUTY_ESCALATION_POLICY_ID }}
+          # count: 10

@@ -1,4 +1,4 @@
-name: CI for ar2-import
+name: ar2-import - Main CI
 
 env:
   image_prefix: 991204835536.dkr.ecr.ap-southeast-1.amazonaws.com/ar2
@@ -14,6 +14,8 @@ on:
       - main
     paths:
       - '**'
+      - '!.github/workflows/**'
+      - '!database/**'
   workflow_dispatch:
 
 concurrency:
