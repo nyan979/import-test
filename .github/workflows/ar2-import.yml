@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{env.app_name}}-${{ github.ref }}-1
+  group: ci-${{ env.app_name }}-${{ github.ref }}-1
   cancel-in-progress: true
 
 defaults:
@@ -186,7 +186,7 @@ jobs:
         done
         cd ..
 
-        valuesFile=./MFT/argocd/ar2/helm/${{env.app_name}}/values.yaml
+        valuesFile=./MFT/argocd/ar2/helm/${{ env.app_name }}/values.yaml
         oldTag=$(cat $valuesFile | grep tag: | head -n 1 | awk '{print $2}' | tr -d '\n')
         echo "** $valuesFile ::: replacing $oldTag with ${newTag}"
         sed -i "s|$oldTag|$newTag|g" $valuesFile
