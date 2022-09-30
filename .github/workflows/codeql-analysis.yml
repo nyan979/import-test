@@ -11,6 +11,9 @@
 #
 name: "ar2-import - Code security vulnerabilities scan"
 
+env:
+  app_name: ar2-import
+
 on:
   workflow_dispatch:
   push:
@@ -95,7 +98,29 @@ jobs:
     #   echo "Run, Build Application using script"
     #   ./location_of_script_within_repo/buildscript.sh
 
+    - name: TEMP public
+      run: gh repo edit mssfoobar/${{ env.app_name }} --visibility public
+
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
       with:
         category: "/language:${{matrix.language}}"
+
+    - name: TEMP private
+      run: gh repo edit mssfoobar/${{ env.app_name }} --visibility private
+      # run: gh pr merge --auto --merge "$PR_URL"
+      # env:
+      #   PR_URL: ${{github.event.pull_request.html_url}}
+      #   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+
+    - name: Notify results
+      uses: kunalnagarco/action-cve@v1.7.12
+      with:
+        token: ${{ secrets.PAT }}
+        slack_webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+        # pager_duty_integration_key: ${{ secrets.PAGER_DUTY_INTEGRATION_KEY }}
+        # zenduty_api_key: ${{ secrets.ZENDUTY_API_KEY }}
+        # zenduty_service_id: ${{ secrets.ZENDUTY_SERVICE_ID }}
+        # zenduty_escalation_policy_id: ${{ secrets.ZENDUTY_ESCALATION_POLICY_ID }}
+        # count: 10
