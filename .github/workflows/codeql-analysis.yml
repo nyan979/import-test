@@ -12,10 +12,12 @@
 name: "ar2-import - Code security vulnerabilities scan"
 
 env:
+  org_name: mssfoobar
   app_name: ar2-import
 
 on:
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [ "main" ]
     paths:
@@ -69,12 +71,11 @@ jobs:
         # Target architecture for Go to use. Examples: x86, x64. Will use system architecture by default.
         architecture: x64 # optional
 
-    - name: TEMP public
-      run: gh repo edit mssfoobar/${{ env.app_name }} --visibility public
+    - name: Set visibility for CodeQL
+      run: gh repo edit ${{ env.org_name }}/${{ env.app_name }} --visibility public
       env:
         GITHUB_TOKEN: ${{ secrets.PAT }}
 
-    # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2
       with:
@@ -107,18 +108,13 @@ jobs:
       with:
         category: "/language:${{matrix.language}}"
 
-    - name: TEMP private
-      run: gh repo edit mssfoobar/${{ env.app_name }} --visibility private
+    - name: Restore visibility
+      run: gh repo edit ${{ env.org_name }}/${{ env.app_name }} --visibility private
       env:
         GITHUB_TOKEN: ${{ secrets.PAT }}
-      # run: gh pr merge --auto --merge "$PR_URL"
-      # env:
-      #   PR_URL: ${{github.event.pull_request.html_url}}
-      #   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-
 
     - name: Notify results
-      uses: kunalnagarco/action-cve@v1.7.12
+      uses: kunalnagarco/action-cve@46009c95365f8835facc116aa3b2cf8e5e605f33 #v1.7.12
       with:
         token: ${{ secrets.PAT }}
         slack_webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
