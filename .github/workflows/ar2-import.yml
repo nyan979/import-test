@@ -9,6 +9,7 @@ env:
   app_name: ar2-import
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - dev-cicd
@@ -17,7 +18,6 @@ on:
       - '**'
       - '!.github/workflows/**'
       - '!database/**'
-  workflow_dispatch:
 
 concurrency:
   group: ci-ar2-import-${{ github.ref }}-1
@@ -214,11 +214,11 @@ jobs:
 
     # if: ${{ github.base_ref == 'main' && github.event_name == 'pull_request' }}
     steps:
-      - uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          # fields: all
-          fields: repo,commit,message,author,workflow
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        if: always()
+    - uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        # fields: all
+        fields: repo,commit,message,author,workflow
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      if: always()
