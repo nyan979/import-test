@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ env.app_name }}-${{ github.ref }}-1
+  group: ci-ar2-import-${{ github.ref }}-1
   cancel-in-progress: true
 
 defaults:
