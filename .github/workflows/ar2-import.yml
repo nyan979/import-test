@@ -82,6 +82,8 @@ jobs:
   security-checks:
     name: vulnerability-code-scan
     uses: mssfoobar/ar2-import/.github/workflows/codeql-analysis.yml@main
+    secrets:
+      PAT: "${{ secrets.PAT }}"
 
   container:
     if: ${{ fromJson(needs.matrix.outputs.matrix != '{"include":[]}' ) }}
