@@ -9,13 +9,12 @@ import (
 )
 
 type ImportMessage struct {
-	RequestID  string
-	UploadType string
-	FileKey    string
-	Config     UploadTypeConfiguration
-	RunConfig  RunTimeConfiguration
-	URL        string
-	Record     []string
+	RequestID     string
+	UploadType    string
+	FileKey       string
+	FileVersionID string
+	URL           string
+	Record        []string
 }
 
 type ImportStatus struct {
@@ -36,6 +35,7 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 
 	workflowId, status := ReceiveRequest(ctx)
 	var newRequestId string
+	var config UploadTypeConfiguration
 
 	err := workflow.ExecuteActivity(ctx, activities.IsAnotherUploadRunning, status.Message.UploadType).Get(ctx, &newRequestId)
 	if err != nil {
@@ -55,12 +55,12 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 		return nil
 	}
 
-	err = workflow.ExecuteActivity(ctx, activities.ReadConfig, status.Message.UploadType).Get(ctx, &status.Message.Config)
+	err = workflow.ExecuteActivity(ctx, activities.ReadConfig, status.Message.UploadType).Get(ctx, config)
 	if err != nil {
 		return err
 	}
 
-	if status.Message.Config == nil {
+	if config == nil {
 		status.Stage = "Upload type config not found"
 		err = SendResponse(ctx, workflowId, *status)
 		if err != nil {
@@ -69,7 +69,7 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 		return nil
 	}
 
-	err = workflow.ExecuteActivity(ctx, activities.GetPresignedUrl, status.Message.Config).Get(ctx, &status.Message.URL)
+	err = workflow.ExecuteActivity(ctx, activities.GetPresignedUrl, config).Get(ctx, &status.Message.URL)
 	if err != nil {
 		err := SendErrorResponse(ctx, workflowId, err)
 		if err != nil {
@@ -83,14 +83,14 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 		return err
 	}
 
-	err = workflow.ExecuteActivity(ctx, activities.InsertConfigRunTime, status.Message.RequestID, status.Message.Config[0].Id).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx, activities.InsertConfigRunTime, status.Message.RequestID, config[0].Id).Get(ctx, nil)
 	if err != nil {
 		return err
 	}
 
 	var statusNew *ImportStatus
 
-	_, statusNew = ReceiveRequestWithTimeOut(ctx)
+	_, statusNew = ReceiveRequestWithTimeOut(ctx, time.Duration(config[0].UploadExpiryDurationInSec))
 	if statusNew == nil {
 		err = workflow.ExecuteActivity(ctx, activities.UpdateConfigRunTimeStatus, status.Message.RequestID, "failed").Get(ctx, nil)
 		if err != nil {

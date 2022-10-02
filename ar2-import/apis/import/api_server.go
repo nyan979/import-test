@@ -17,10 +17,11 @@ import (
 )
 
 type Application struct {
-	temporalClient client.Client
-	KafkaReader    *kafka.Reader
-	KafkaWriter    *kafka.Writer
-	activities     workflow.Activities
+	temporalClient    client.Client
+	KafkaMinioReader  *kafka.Reader
+	KafkaImportReader *kafka.Reader
+	KafkaWriter       *kafka.Writer
+	activities        workflow.Activities
 }
 
 func main() {
@@ -37,9 +38,10 @@ func main() {
 
 	// TODO: implement temporal workflow
 	app := Application{
-		temporalClient: client,
-		KafkaReader:    utils.NewKafkaReader(),
-		KafkaWriter:    utils.NewKafkaWriter(),
+		temporalClient:    client,
+		KafkaMinioReader:  utils.NewMinioKafkaReader(),
+		KafkaImportReader: utils.NewImportKafkaReader(),
+		KafkaWriter:       utils.NewKafkaWriter(),
 		activities: workflow.Activities{
 			MinioClient:   utils.SetMinioClient(),
 			GraphqlClient: utils.SetGraphqlClient(),
@@ -47,25 +49,34 @@ func main() {
 	}
 
 	ctx := context.Background()
-	// RequestId = make(chan string, 1000)
-	message := make(chan kafka.Message, 1000)
-	messageCommit := make(chan kafka.Message, 1000)
+	minioMessage := make(chan kafka.Message, 1000)
+	minioMessageCommit := make(chan kafka.Message, 1000)
+	completeMessage := make(chan kafka.Message, 1000)
+	completeMessageCommit := make(chan kafka.Message, 1000)
 
 	g, ctx := errgroup.WithContext(ctx)
 
 	// fetch minio notification message go routine
 	g.Go(func() error {
-		return app.FetchMessage(ctx, message)
+		return app.FetchMinioMessage(ctx, minioMessage)
+	})
+
+	g.Go(func() error {
+		return app.FetchImportMessage(ctx, completeMessage)
 	})
 
 	// write csv content to kafka topic go routine
 	g.Go(func() error {
-		return app.WriteMessages(ctx, message, messageCommit /*, RequestId*/)
+		return app.WriteMessages(ctx, minioMessage, minioMessageCommit /*, RequestId*/)
 	})
 
 	// commit to offset minio notification messages go routine
 	g.Go(func() error {
-		return app.CommitMessages(ctx, messageCommit)
+		return app.CommitMinioMessages(ctx, minioMessageCommit)
+	})
+
+	g.Go(func() error {
+		return app.CommitImportMessages(ctx, completeMessageCommit)
 	})
 
 	// set and serve on port

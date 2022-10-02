@@ -71,10 +71,27 @@ type MinioMessage struct {
 	} `json:"Records"`
 }
 
-func (app *Application) FetchMessage(ctx context.Context, messages chan<- kafka.Message) error {
+func (app *Application) FetchMinioMessage(ctx context.Context, messages chan<- kafka.Message) error {
 	log.Println("Kafka Fetch Message Starting...")
 	for {
-		msg, err := app.KafkaReader.FetchMessage(ctx)
+		msg, err := app.KafkaMinioReader.FetchMessage(ctx)
+		if err != nil {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case messages <- msg:
+			log.Printf("Fetched an msg: %v \n", string(msg.Value))
+		}
+	}
+}
+
+func (app *Application) FetchImportMessage(ctx context.Context, messages chan<- kafka.Message) error {
+	log.Println("Kafka Fetch Message Starting...")
+	for {
+		msg, err := app.KafkaImportReader.FetchMessage(ctx)
 		if err != nil {
 			return err
 		}
@@ -105,15 +122,14 @@ func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka
 
 			status := &workflow.ImportStatus{}
 			status.Message.FileKey = minioMsg.Records[0].S3.Object.Key
+			status.Message.FileVersionID = minioMsg.Records[0].S3.Object.VersionId
 
-			status.Message.RunConfig, status.Message.Config, err = app.GetRuntimeConfig(status.Message.FileKey)
+			status.Message.RequestID, err = app.getRequestIDFromRunConfig(status.Message.FileKey)
 			if err != nil {
 				return err
 			}
 
-			status.Message.RunConfig[0].FileVersionId = graphql.String(minioMsg.Records[0].S3.Object.VersionId)
-
-			status, err = utils.UpdateWorkflow(app.temporalClient, string(status.Message.RunConfig[0].RequestId), status)
+			status, err = utils.ExecuteImportWorkflow(app.temporalClient, string(status.Message.RequestID), status)
 			if err != nil {
 				return err
 			}
@@ -122,7 +138,7 @@ func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka
 
 			for _, line := range status.Message.Record {
 				jsonMessages = append(jsonMessages, jsonMessage{
-					RequestId: string(status.Message.RunConfig[0].RequestId),
+					RequestId: string(status.Message.RequestID),
 					Record:    line,
 				})
 			}
@@ -148,12 +164,12 @@ func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka
 	}
 }
 
-func (app *Application) CommitMessages(ctx context.Context, messagesCommit <-chan kafka.Message) error {
+func (app *Application) CommitMinioMessages(ctx context.Context, messagesCommit <-chan kafka.Message) error {
 	for {
 		select {
 		case <-ctx.Done():
 		case msg := <-messagesCommit:
-			err := app.KafkaReader.CommitMessages(ctx, msg)
+			err := app.KafkaMinioReader.CommitMessages(ctx, msg)
 			if err != nil {
 				return err
 			}
@@ -162,7 +178,21 @@ func (app *Application) CommitMessages(ctx context.Context, messagesCommit <-cha
 	}
 }
 
-func (app *Application) GetRuntimeConfig(filename string) (workflow.RunTimeConfiguration, workflow.UploadTypeConfiguration, error) {
+func (app *Application) CommitImportMessages(ctx context.Context, messagesCommit <-chan kafka.Message) error {
+	for {
+		select {
+		case <-ctx.Done():
+		case msg := <-messagesCommit:
+			err := app.KafkaImportReader.CommitMessages(ctx, msg)
+			if err != nil {
+				return err
+			}
+			log.Printf("committed an msg: %v \n", string(msg.Value))
+		}
+	}
+}
+
+func (app *Application) getRequestIDFromRunConfig(filename string) (string, error) {
 	var q1 struct {
 		workflow.RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {fileKey: {_eq: $fileKey}}, status: {_eq: $status}})"`
 	}
@@ -174,25 +204,12 @@ func (app *Application) GetRuntimeConfig(filename string) (workflow.RunTimeConfi
 
 	if err := app.activities.GraphqlClient.Query(context.Background(), &q1, variables); err != nil {
 		log.Fatal(err)
-		return nil, nil, err
+		return "", err
 	}
 
-	var q2 struct {
-		workflow.UploadTypeConfiguration `graphql:"import_configuration(where: {fileKey: {_eq: $fileKey}})"`
+	if len(q1.RunTimeConfiguration) == 0 {
+		return "", nil
 	}
 
-	variables = map[string]interface{}{
-		"fileKey": graphql.String(filename),
-	}
-
-	if err := app.activities.GraphqlClient.Query(context.Background(), &q2, variables); err != nil {
-		log.Fatal(err)
-		return nil, nil, err
-	}
-
-	if len(q1.RunTimeConfiguration) == 0 || len(q2.UploadTypeConfiguration) == 0 {
-		return nil, nil, nil
-	}
-
-	return q1.RunTimeConfiguration, q2.UploadTypeConfiguration, nil
+	return string(q1.RunTimeConfiguration[0].RequestId), nil
 }

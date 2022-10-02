@@ -50,10 +50,20 @@ func SetGraphqlClient() *graphql.Client {
 	return client
 }
 
-func NewKafkaReader() *kafka.Reader {
+func NewMinioKafkaReader() *kafka.Reader {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")},
 		Topic:   os.Getenv("KAFKA_IMPORT_TOPIC"),
+		GroupID: "testing",
+	})
+
+	return reader
+}
+
+func NewImportKafkaReader() *kafka.Reader {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: []string{os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")},
+		Topic:   os.Getenv("KAFKA_COMPLETE_TOPIC"),
 		GroupID: "testing",
 	})
 
@@ -148,7 +158,7 @@ func CreateImportWorkflow(c client.Client, status *workflow.ImportStatus) error 
 	return nil
 }
 
-func UpdateWorkflow(c client.Client, requestId string, status *workflow.ImportStatus) (*workflow.ImportStatus, error) {
+func ExecuteImportWorkflow(c client.Client, requestId string, status *workflow.ImportStatus) (*workflow.ImportStatus, error) {
 	workflowOptions := client.StartWorkflowOptions{
 		TaskQueue: "import-service",
 	}
