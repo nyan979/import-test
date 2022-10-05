@@ -33,35 +33,45 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
+	log.Println("Start of workflow")
+
 	workflowId, status := ReceiveRequest(ctx)
 	var newRequestId string
 	var config UploadTypeConfiguration
 
-	err := workflow.ExecuteActivity(ctx, activities.IsAnotherUploadRunning, status.Message.UploadType).Get(ctx, &newRequestId)
+	log.Println(status)
+
+	log.Println("Execute IsServiceBusy")
+
+	err := workflow.ExecuteActivity(ctx, activities.IsServiceBusy, status.Message.UploadType).Get(ctx, &newRequestId)
 	if err != nil {
 		return err
 	}
 
 	if len(newRequestId) > 0 {
 		status.Message.RequestID = newRequestId
-		status.Stage = "Service not available"
+		status.Stage = "Service Busy"
 		err = SendResponse(ctx, workflowId, *status)
 		if err != nil {
-			err := SendErrorResponse(ctx, workflowId, err)
-			if err != nil {
-				return err
-			}
+			return err
 		}
 		return nil
 	}
 
-	err = workflow.ExecuteActivity(ctx, activities.ReadConfig, status.Message.UploadType).Get(ctx, config)
+	log.Println("Execute ReadConfig")
+
+	err = workflow.ExecuteActivity(ctx, activities.ReadConfig, status.Message.UploadType).Get(ctx, &config)
 	if err != nil {
-		return err
+		err := SendErrorResponse(ctx, workflowId, err)
+		if err != nil {
+			return err
+		}
 	}
 
+	log.Println(config)
+
 	if config == nil {
-		status.Stage = "Upload type config not found"
+		status.Stage = "Upload type not found"
 		err = SendResponse(ctx, workflowId, *status)
 		if err != nil {
 			return err
@@ -110,7 +120,7 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 		}
 	}
 
-	err = workflow.ExecuteActivity(ctx, activities.ParseCSVToLine, status.Message.FileKey).Get(ctx, &status.Message.Record)
+	err = workflow.ExecuteActivity(ctx, activities.ParseCSV, status.Message.FileKey).Get(ctx, &status.Message.Record)
 	if err != nil {
 		err := SendErrorResponse(ctx, workflowId, err)
 		if err != nil {
@@ -121,10 +131,7 @@ func ImportServiceWorkflow(ctx workflow.Context) error {
 	status.Stage = "Parsed CSV content"
 	err = SendResponse(ctx, workflowId, *status)
 	if err != nil {
-		err := SendErrorResponse(ctx, workflowId, err)
-		if err != nil {
-			return err
-		}
+		return err
 	}
 
 	log.Println("End of workflow")

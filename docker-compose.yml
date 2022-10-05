@@ -5,7 +5,7 @@ services:
     image: ${REPONAME}/ar2-import-api:${TAG}
     build: 
       context: ./
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile_API
     environment:
       - APP_PORT=${APP_PORT}
       - HASURA_HOST=${HASURA_HOST}
@@ -23,8 +23,40 @@ services:
       - KAFKA_PORT=${KAFKA_PORT}
       - KAFKA_IMPORT_TOPIC=${KAFKA_IMPORT_TOPIC}
       - KAFKA_SERVICE_TOPIC=${KAFKA_SERVICE_TOPIC}
+      - KAFKA_COMPLETE_TOPIC=${KAFKA_COMPLETE_TOPIC}
     ports:
       - ${APP_PORT}:${APP_PORT}
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+    networks:
+      - ar-network
+
+  ar2-import-worker:
+    container_name: ar2-import-worker
+    image: ${REPONAME}/ar2-import-worker:${TAG}
+    build: 
+      context: ./
+      dockerfile: Dockerfile_Worker
+    environment:
+      - APP_PORT=${APP_PORT}
+      - HASURA_HOST=${HASURA_HOST}
+      - HASURA_PORT=${HASURA_PORT}
+      - GQL_ENDPOINT=${GQL_ENDPOINT}
+      - HASURA_GRAPHQL_ADMIN_SECRET=${HASURA_GRAPHQL_ADMIN_SECRET}
+      - SERVICE_VERSION=${SERVICE_VERSION}
+      - DEVELOPMENT=${DEVELOPMENT}
+      - MINIO_HOST=${MINIO_HOST}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - KAFKA_HOST=${KAFKA_HOST}
+      - KAFKA_PORT=${KAFKA_PORT}
+      - KAFKA_IMPORT_TOPIC=${KAFKA_IMPORT_TOPIC}
+      - KAFKA_SERVICE_TOPIC=${KAFKA_SERVICE_TOPIC}
+      - KAFKA_COMPLETE_TOPIC=${KAFKA_COMPLETE_TOPIC}
     deploy:
       restart_policy:
         condition: on-failure

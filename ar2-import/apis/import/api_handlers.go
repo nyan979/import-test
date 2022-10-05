@@ -68,10 +68,10 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 	var payload any
 
 	switch status.Stage {
-	case "Upload type config not found":
+	case "Upload type not found":
 		http.Error(w, "No such upload type configuration", http.StatusBadRequest)
 		return
-	case "Service not available":
+	case "Service Busy":
 		payload = jsonResponse{
 			RequestId: status.Message.RequestID,
 		}

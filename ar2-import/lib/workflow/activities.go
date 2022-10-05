@@ -123,7 +123,7 @@ func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (string, er
 	return presignedURL.String(), nil
 }
 
-func (a *Activities) IsAnotherUploadRunning(uploadType string) (string, error) {
+func (a *Activities) IsServiceBusy(uploadType string) (string, error) {
 	var q struct {
 		RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {uploadType: {_eq: $uploadType}}}, distinct_on: status)"`
 	}
@@ -221,7 +221,7 @@ func (a *Activities) UpdateConfigRunTimeStatus(requestId string, status string) 
 	return nil
 }
 
-func (a *Activities) ParseCSVToLine(filekey string) ([]string, error) {
+func (a *Activities) ParseCSV(filekey string) ([]string, error) {
 	object, err := a.MinioClient.GetObject(os.Getenv("MINIO_BUCKET_NAME"), filekey, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err

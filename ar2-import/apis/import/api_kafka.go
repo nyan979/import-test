@@ -88,7 +88,7 @@ func (app *Application) FetchMinioMessage(ctx context.Context, messages chan<- k
 	}
 }
 
-func (app *Application) FetchImportMessage(ctx context.Context, messages chan<- kafka.Message) error {
+func (app *Application) FetchImportMessage(ctx context.Context, messages chan<- kafka.Message, messagesCommit chan<- kafka.Message) error {
 	log.Println("Kafka Fetch Message Starting...")
 	for {
 		msg, err := app.KafkaImportReader.FetchMessage(ctx)
@@ -101,6 +101,16 @@ func (app *Application) FetchImportMessage(ctx context.Context, messages chan<- 
 			return ctx.Err()
 		case messages <- msg:
 			log.Printf("Fetched an msg: %v \n", string(msg.Value))
+
+			err = app.updateConfigRunTimeStatus(string(msg.Value), "done")
+			if err != nil {
+				return err
+			}
+
+			select {
+			case <-ctx.Done():
+			case messagesCommit <- msg:
+			}
 		}
 	}
 }
@@ -212,4 +222,26 @@ func (app *Application) getRequestIDFromRunConfig(filename string) (string, erro
 	}
 
 	return string(q1.RunTimeConfiguration[0].RequestId), nil
+}
+
+func (app *Application) updateConfigRunTimeStatus(requestId string, status string) error {
+	var mutation struct {
+		UpdateData struct {
+			UpdatedAt string
+		} `graphql:"update_import_runtime_by_pk(pk_columns: {requestId: $rqId}, _set: {status: $status})"`
+	}
+
+	variables := map[string]interface{}{
+		"rqId":   graphql.String(requestId),
+		"status": graphql.String(status),
+	}
+
+	log.Println(variables)
+
+	if err := app.activities.GraphqlClient.Mutate(context.Background(), &mutation, variables); err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	return nil
 }

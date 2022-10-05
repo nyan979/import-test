@@ -62,7 +62,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return app.FetchImportMessage(ctx, completeMessage)
+		return app.FetchImportMessage(ctx, completeMessage, completeMessageCommit)
 	})
 
 	// write csv content to kafka topic go routine
