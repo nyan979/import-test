@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"mssfoobar/ar2-import/ar2-import/lib/utils"
 	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 	"net/http"
@@ -10,59 +9,83 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/segmentio/kafka-go"
+	"go.temporal.io/sdk/client"
 	"golang.org/x/sync/errgroup"
+	zapadapter "logur.dev/adapter/zap"
+	"logur.dev/logur"
 )
 
 type Application struct {
-	activities workflow.Activities
+	temporalClient    client.Client
+	KafkaMinioReader  *kafka.Reader
+	KafkaImportReader *kafka.Reader
+	KafkaWriter       *kafka.Writer
+	activities        workflow.Activities
 }
 
 func main() {
 	godotenv.Load("../../../.env")
 
-	// TODO: implement temporal workflow
+	logger := logur.LoggerToKV(zapadapter.New(utils.InitZapLogger()))
+
+	client, err := utils.InitTemporalConnection(logger)
+	if err != nil {
+		logger.Error(err.Error())
+	}
+
+	defer client.Close()
+
 	app := Application{
+		temporalClient:    client,
+		KafkaMinioReader:  utils.InitMinioKafkaReader(logger),
+		KafkaImportReader: utils.InitImportKafkaReader(logger),
+		KafkaWriter:       utils.InitKafkaWriter(logger),
 		activities: workflow.Activities{
-			MinioClient:   utils.SetMinioClient(),
-			GraphqlClient: utils.SetGraphqlClient(),
-			KafkaReader:   utils.NewKafkaReader(),
-			KafkaWriter:   utils.NewKafkaWriter(),
-			RequestId:     "",
+			MinioClient:   utils.InitMinioClient(logger),
+			GraphqlClient: utils.InitGraphqlClient(logger),
 		},
 	}
 
 	ctx := context.Background()
-	// RequestId = make(chan string, 1000)
-	message := make(chan kafka.Message, 1000)
-	messageCommit := make(chan kafka.Message, 1000)
+	minioMessage := make(chan kafka.Message, 1000)
+	minioMessageCommit := make(chan kafka.Message, 1000)
+	importMessage := make(chan kafka.Message, 1000)
+	importMessageCommit := make(chan kafka.Message, 1000)
 
 	g, ctx := errgroup.WithContext(ctx)
 
 	// fetch minio notification message go routine
 	g.Go(func() error {
-		return app.activities.FetchMessage(ctx, message)
+		return app.FetchMinioMessage(ctx, minioMessage, logger)
+	})
+
+	g.Go(func() error {
+		return app.FetchImportMessage(ctx, importMessage, importMessageCommit, logger)
 	})
 
 	// write csv content to kafka topic go routine
 	g.Go(func() error {
-		return app.activities.WriteMessages(ctx, message, messageCommit /*, RequestId*/)
+		return app.WriteMessages(ctx, minioMessage, minioMessageCommit, logger)
 	})
 
 	// commit to offset minio notification messages go routine
 	g.Go(func() error {
-		return app.activities.CommitMessages(ctx, messageCommit)
+		return app.CommitMinioMessages(ctx, minioMessageCommit, logger)
 	})
 
-	// set and serve on port
+	g.Go(func() error {
+		return app.CommitImportMessages(ctx, importMessageCommit, logger)
+	})
+
 	port := ":" + os.Getenv("APP_PORT")
 
-	err := http.ListenAndServe(port, app.routes())
+	err = http.ListenAndServe(port, app.routes(logger))
 	if err != nil {
-		log.Fatalln(err)
+		logger.Error(err.Error())
 	}
 
-	conErr := g.Wait()
-	if conErr != nil {
-		log.Fatalln(conErr)
+	goErr := g.Wait()
+	if goErr != nil {
+		logger.Error(goErr.Error())
 	}
 }

@@ -1,18 +1,23 @@
 package utils
 
 import (
+	"context"
+	"fmt"
 	"log"
+	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 	"net/http"
 	"os"
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/minio/minio-go"
 	"github.com/segmentio/kafka-go"
+	"go.temporal.io/sdk/client"
+	temporalLog "go.temporal.io/sdk/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-func SetMinioClient() *minio.Client {
+func InitMinioClient(logger temporalLog.Logger) *minio.Client {
 	host := os.Getenv("MINIO_HOST")
 	port := os.Getenv("MINIO_PORT")
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
@@ -23,44 +28,75 @@ func SetMinioClient() *minio.Client {
 
 	client, err := minio.New(endpoint, accessKey, secretKey, useSSL)
 	if err != nil {
-		log.Fatalln(err)
+		logger.Error(err.Error())
 	}
+
+	logger.Info("Initialized Minio Client:", "minioHost", host, "minioPort", port)
 
 	return client
 }
 
-func SetGraphqlClient() *graphql.Client {
-	dbHost := os.Getenv("HASURA_HOST")
-	dbPort := os.Getenv("HASURA_PORT")
+func InitGraphqlClient(logger temporalLog.Logger) *graphql.Client {
+	host := os.Getenv("HASURA_HOST")
+	port := os.Getenv("HASURA_PORT")
 	gqlEndpoint := os.Getenv("GQL_ENDPOINT")
 	adminkey := os.Getenv("HASURA_GRAPHQL_ADMIN_SECRET")
 
-	graphqlURL := "http://" + dbHost + ":" + dbPort + "/" + gqlEndpoint
+	graphqlURL := "http://" + host + ":" + port + "/" + gqlEndpoint
 
 	client := graphql.NewClient(graphqlURL, nil)
 	client = client.WithRequestModifier(func(req *http.Request) {
 		req.Header.Set("x-hasura-admin-secret", adminkey)
 	})
 
+	logger.Info("Initialized Hasura GraphQL Client:", "hasuraHost", host, "hasuraPort", port, "gqlEndpoint", gqlEndpoint)
+
 	return client
 }
 
-func NewKafkaReader() *kafka.Reader {
+func InitMinioKafkaReader(logger temporalLog.Logger) *kafka.Reader {
+	host := os.Getenv("KAFKA_HOST")
+	port := os.Getenv("KAFKA_PORT")
+	topic := os.Getenv("KAFKA_MINIO_TOPIC")
+
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")},
-		Topic:   os.Getenv("KAFKA_IMPORT_TOPIC"),
+		Brokers: []string{host + ":" + port},
+		Topic:   topic,
 		GroupID: "minio-consumer-group-1",
 	})
+
+	logger.Info("Initialized Minio Kafka Reader:", "brokerHost", host, "brokerPort", port, "topic", topic)
 
 	return reader
 }
 
-func NewKafkaWriter() *kafka.Writer {
+func InitImportKafkaReader(logger temporalLog.Logger) *kafka.Reader {
+	host := os.Getenv("KAFKA_HOST")
+	port := os.Getenv("KAFKA_PORT")
+	topic := os.Getenv("KAFKA_SERVICE_OUT_TOPIC")
+
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: []string{host + ":" + port},
+		Topic:   topic,
+		GroupID: "import-consumer-group-1",
+	})
+
+	logger.Info("Initialized Service_Out Kafka Reader:", "brokerHost", host, "brokerPort", port, "topic", topic)
+
+	return reader
+}
+
+func InitKafkaWriter(logger temporalLog.Logger) *kafka.Writer {
+	host := os.Getenv("KAFKA_HOST")
+	port := os.Getenv("KAFKA_PORT")
+	topic := os.Getenv("KAFKA_SERVICE_IN_TOPIC")
 
 	writer := &kafka.Writer{
-		Addr:  kafka.TCP(os.Getenv("KAFKA_HOST") + ":" + os.Getenv("KAFKA_PORT")),
-		Topic: os.Getenv("KAFKA_SERVICE_TOPIC"),
+		Addr:  kafka.TCP(host + ":" + port),
+		Topic: topic,
 	}
+
+	logger.Info("Initialized Service_In Kafka Writer:", "brokerHost", host, "brokerPort", port, "topic", topic)
 
 	return writer
 }
@@ -112,4 +148,51 @@ func InitZapLogger() *zap.Logger {
 	}
 
 	return logger
+}
+
+func InitTemporalConnection(logger temporalLog.Logger) (client.Client, error) {
+	var TemporalHost = os.Getenv("TEMPORAL_HOST")
+	var TemporalPort = os.Getenv("TEMPORAL_PORT")
+	var TemporalNamespace = os.Getenv("TEMPORAL_NAMESPACE")
+
+	logger.Info("Temporal Connection Details:", "temporalHost", TemporalHost, "temporalPort", TemporalPort, "temporalNamespace", TemporalNamespace)
+
+	return client.Dial(client.Options{
+		HostPort:  fmt.Sprintf("%v:%v", TemporalHost, TemporalPort),
+		Namespace: TemporalNamespace,
+		Logger:    logger,
+	})
+}
+
+func CreateImportWorkflow(c client.Client, status *workflow.ImportSignal) error {
+	workflowOptions := client.StartWorkflowOptions{
+		TaskQueue: "import-service",
+		ID:        status.Message.RequestID,
+	}
+	ctx := context.Background()
+
+	_, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.ImportServiceWorkflow)
+	if err != nil {
+		return fmt.Errorf("unable to execute order workflow: %w", err)
+	}
+
+	return nil
+}
+
+func ExecuteImportWorkflow(c client.Client, requestId string, status *workflow.ImportSignal) (*workflow.ImportSignal, error) {
+	workflowOptions := client.StartWorkflowOptions{
+		TaskQueue: "import-service",
+	}
+	ctx := context.Background()
+
+	we, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.SignalImportServiceWorkflow, requestId, status)
+	if err != nil {
+		return status, fmt.Errorf("unable to execute workflow: %w", err)
+	}
+	err = we.Get(ctx, &status)
+	if err != nil {
+		return status, err
+	}
+
+	return status, nil
 }
