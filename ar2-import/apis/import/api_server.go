@@ -59,6 +59,7 @@ func main() {
 		return app.FetchMinioMessage(ctx, minioMessage, logger)
 	})
 
+	// fetch import notification message go routine
 	g.Go(func() error {
 		return app.FetchImportMessage(ctx, importMessage, importMessageCommit, logger)
 	})
@@ -68,11 +69,12 @@ func main() {
 		return app.WriteMessages(ctx, minioMessage, minioMessageCommit, logger)
 	})
 
-	// commit to offset minio notification messages go routine
+	// commit to offset minio notification message go routine
 	g.Go(func() error {
 		return app.CommitMinioMessages(ctx, minioMessageCommit, logger)
 	})
 
+	// commit to offset import notification message go routine
 	g.Go(func() error {
 		return app.CommitImportMessages(ctx, importMessageCommit, logger)
 	})
