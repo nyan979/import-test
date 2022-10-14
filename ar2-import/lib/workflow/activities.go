@@ -11,87 +11,7 @@ import (
 	"github.com/minio/minio-go"
 )
 
-type Activities struct {
-	MinioClient   *minio.Client
-	GraphqlClient *graphql.Client
-}
-
-var activities Activities
-
-type UploadTypeConfiguration []struct {
-	Id                        graphql.String
-	UploadType                graphql.String
-	FileKey                   graphql.String
-	UploadExpiryDurationInSec graphql.Int
-	DestinationServiceTopic   graphql.String
-}
-
-type RunTimeConfiguration []struct {
-	RequestId     graphql.String
-	ConfigId      graphql.String
-	FileVersionId graphql.String
-	Status        graphql.String
-	Description   graphql.String
-	CreatedAt     graphql.String
-	UpdatedAt     graphql.String
-}
-
-type MinioMessage struct {
-	EventName string `json:"EventName"`
-	Key       string `json:"Key"`
-	Records   []struct {
-		EventVersion string `json:"eventVersion"`
-		EventSource  string `json:"eventSource"`
-		AwsRegion    string `json:"awsRegion"`
-		EventTime    string `json:"eventTime"`
-		EventName    string `json:"eventName"`
-		UserIdentity struct {
-			PrincipalId string `json:"principalId"`
-		} `json:"userIdentity"`
-		RequestParameters struct {
-			PrincipalId     string `json:"principalId"`
-			Region          string `json:"region"`
-			SourceIPAddress string `json:"sourceIPAddress"`
-		} `json:"requestParameters"`
-		ResponseElements struct {
-			Content_Length          string `json:"content-length"`
-			X_AMZ_RequestId         string `json:"x-amz-request-id"`
-			X_MINIO_Deployment_Id   string `json:"x-minio-deployment-id"`
-			X_MINIO_Origin_Endpoint string `json:"x-minio-origin-endpoint"`
-		} `json:"responseElements"`
-		S3 struct {
-			S3SchemaVersion string `json:"s3SchemaVersion"`
-			ConfigurationId string `json:"configurationId"`
-			Bucket          struct {
-				Name          string `json:"name"`
-				OwnerIdentity struct {
-					PrincipalId string `json:"principalId"`
-				}
-				ARN string `json:"arn"`
-			} `json:"bucket"`
-			Object struct {
-				Key          string `json:"key"`
-				Size         int    `json:"size"`
-				ETag         string `json:"eTag"`
-				ContentType  string `json:"contentType"`
-				UserMetaData struct {
-					ContentType                         string `json:"contentType"`
-					X_AMZ_Object_Lock_Mode              string `json:"x-amz-object-lock-mode"`
-					X_AMZ_Object_Lock_Retain_Until_Date string `json:"x-amz-object-lock-retain-until-date"`
-				} `json:"userMetadata"`
-				VersionId string `json:"versionId"`
-				Sequencer string `json:"sequencer"`
-			} `json:"Object"`
-		} `json:"s3"`
-		Source struct {
-			Host      string `json:"host"`
-			Port      string `json:"port"`
-			UserAgent string `json:"userAgent"`
-		} `json:"source"`
-	} `json:"Records"`
-}
-
-func (a *Activities) ReadConfig(uploadType string) (UploadTypeConfiguration, error) {
+func (a *Activities) GetConfiguration(uploadType string) (UploadTypeConfiguration, error) {
 	var q struct {
 		UploadTypeConfiguration `graphql:"import_configuration(where: {uploadType: {_eq: $configUploadType}})"`
 	}
@@ -123,7 +43,7 @@ func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (string, er
 	return presignedURL.String(), nil
 }
 
-func (a *Activities) IsServiceBusy(uploadType string) (string, error) {
+func (a *Activities) GetBusyRuntimeRequestId(uploadType string) (string, error) {
 	var q struct {
 		RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {uploadType: {_eq: $uploadType}}}, distinct_on: status)"`
 	}
@@ -156,7 +76,6 @@ func (a *Activities) InsertConfigRunTime(requestId string, configId string) erro
 	var mutation struct {
 		InsertData struct {
 			CreatedAt string
-			UpdatedAt string
 		} `graphql:"insert_import_runtime_one(object: $object)"`
 	}
 

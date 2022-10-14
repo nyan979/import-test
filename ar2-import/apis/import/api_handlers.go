@@ -47,19 +47,19 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	status := &workflow.ImportStatus{
+	signal := &workflow.ImportSignal{
 		Message: workflow.ImportMessage{
 			RequestID: requestId, UploadType: uploadType,
 		},
 	}
 
-	err := utils.CreateImportWorkflow(app.temporalClient, status)
+	err := utils.CreateImportWorkflow(app.temporalClient, signal)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	status, err = utils.ExecuteImportWorkflow(app.temporalClient, requestId, status)
+	signal, err = utils.ExecuteImportWorkflow(app.temporalClient, requestId, signal)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -67,17 +67,17 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 
 	var payload any
 
-	switch status.Stage {
-	case "Upload type not found":
+	switch signal.Stage {
+	case workflow.UploadTypeStage:
 		http.Error(w, "No such upload type configuration", http.StatusBadRequest)
 		return
-	case "Service Busy":
+	case workflow.ServiceBusyStage:
 		payload = jsonResponse{
-			RequestId: status.Message.RequestID,
+			RequestId: signal.Message.RequestID,
 		}
-	case "Presigned Url":
+	case workflow.PresignedUrlStage:
 		payload = jsonResponse{
-			PresignedUrl: status.Message.URL,
+			PresignedUrl: signal.Message.URL,
 			RequestId:    requestId,
 		}
 	}

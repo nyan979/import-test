@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"mssfoobar/ar2-import/ar2-import/lib/utils"
 	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/segmentio/kafka-go"
+	"logur.dev/logur"
 )
 
 type jsonMessage struct {
@@ -71,11 +71,11 @@ type MinioMessage struct {
 	} `json:"Records"`
 }
 
-func (app *Application) FetchMinioMessage(ctx context.Context, messages chan<- kafka.Message) error {
-	log.Println("Kafka Fetch Message Starting...")
+func (app *Application) FetchMinioMessage(ctx context.Context, messages chan<- kafka.Message, logger logur.KVLogger) error {
 	for {
 		msg, err := app.KafkaMinioReader.FetchMessage(ctx)
 		if err != nil {
+			logger.Error(err.Error())
 			return err
 		}
 
@@ -83,13 +83,12 @@ func (app *Application) FetchMinioMessage(ctx context.Context, messages chan<- k
 		case <-ctx.Done():
 			return ctx.Err()
 		case messages <- msg:
-			log.Printf("Fetched an msg: %v \n", string(msg.Value))
+			logger.Info("Fetched a Minio message:", "minioMessage", string(msg.Value))
 		}
 	}
 }
 
-func (app *Application) FetchImportMessage(ctx context.Context, messages chan<- kafka.Message, messagesCommit chan<- kafka.Message) error {
-	log.Println("Kafka Fetch Message Starting...")
+func (app *Application) FetchImportMessage(ctx context.Context, messages chan<- kafka.Message, messagesCommit chan<- kafka.Message, logger logur.KVLogger) error {
 	for {
 		msg, err := app.KafkaImportReader.FetchMessage(ctx)
 		if err != nil {
@@ -100,10 +99,11 @@ func (app *Application) FetchImportMessage(ctx context.Context, messages chan<- 
 		case <-ctx.Done():
 			return ctx.Err()
 		case messages <- msg:
-			log.Printf("Fetched an msg: %v \n", string(msg.Value))
+			logger.Info("Fetched an Import message:", "importMessage", string(msg.Value))
 
 			err = app.updateConfigRunTimeStatus(string(msg.Value), "done")
 			if err != nil {
+				logger.Error(err.Error())
 				return err
 			}
 
@@ -115,9 +115,7 @@ func (app *Application) FetchImportMessage(ctx context.Context, messages chan<- 
 	}
 }
 
-func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka.Message, messagesCommit chan<- kafka.Message) error {
-	log.Println("Kafka Write Message Starting...")
-
+func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka.Message, messagesCommit chan<- kafka.Message, logger logur.KVLogger) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -127,20 +125,23 @@ func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka
 
 			err := json.Unmarshal(msg.Value, &minioMsg)
 			if err != nil {
+				logger.Error(err.Error())
 				return err
 			}
 
-			status := &workflow.ImportStatus{}
+			status := &workflow.ImportSignal{}
 			status.Message.FileKey = minioMsg.Records[0].S3.Object.Key
 			status.Message.FileVersionID = minioMsg.Records[0].S3.Object.VersionId
 
-			status.Message.RequestID, err = app.getRequestIDFromRunConfig(status.Message.FileKey)
+			status.Message.RequestID, err = app.getRequestIdByFileKey(status.Message.FileKey)
 			if err != nil {
+				logger.Error(err.Error())
 				return err
 			}
 
-			status, err = utils.ExecuteImportWorkflow(app.temporalClient, string(status.Message.RequestID), status)
+			status, err = utils.ExecuteImportWorkflow(app.temporalClient, status.Message.RequestID, status)
 			if err != nil {
+				logger.Error(err.Error())
 				return err
 			}
 
@@ -163,6 +164,7 @@ func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka
 
 			err = app.KafkaWriter.WriteMessages(ctx, kafkaMessage...)
 			if err != nil {
+				logger.Error(err.Error())
 				return err
 			}
 
@@ -174,56 +176,59 @@ func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka
 	}
 }
 
-func (app *Application) CommitMinioMessages(ctx context.Context, messagesCommit <-chan kafka.Message) error {
+func (app *Application) CommitMinioMessages(ctx context.Context, messagesCommit <-chan kafka.Message, logger logur.KVLogger) error {
 	for {
 		select {
 		case <-ctx.Done():
 		case msg := <-messagesCommit:
 			err := app.KafkaMinioReader.CommitMessages(ctx, msg)
 			if err != nil {
+				logger.Error(err.Error())
 				return err
 			}
-			log.Printf("committed an msg: %v \n", string(msg.Value))
+			logger.Info("Committed a Minio message:", "minioMessage", string(msg.Value))
 		}
 	}
 }
 
-func (app *Application) CommitImportMessages(ctx context.Context, messagesCommit <-chan kafka.Message) error {
+func (app *Application) CommitImportMessages(ctx context.Context, messagesCommit <-chan kafka.Message, logger logur.KVLogger) error {
 	for {
 		select {
 		case <-ctx.Done():
 		case msg := <-messagesCommit:
 			err := app.KafkaImportReader.CommitMessages(ctx, msg)
 			if err != nil {
+				logger.Error(err.Error())
 				return err
 			}
-			log.Printf("committed an msg: %v \n", string(msg.Value))
+			logger.Info("Committed an Import message:", "importMessage", string(msg.Value))
 		}
 	}
 }
 
-func (app *Application) getRequestIDFromRunConfig(filename string) (string, error) {
-	var q1 struct {
+// this cannot be done inside temporal workflow
+func (app *Application) getRequestIdByFileKey(filekey string) (string, error) {
+	var q struct {
 		workflow.RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {fileKey: {_eq: $fileKey}}, status: {_eq: $status}})"`
 	}
 
 	variables := map[string]interface{}{
-		"fileKey": graphql.String(filename),
+		"fileKey": graphql.String(filekey),
 		"status":  graphql.String("uploading"),
 	}
 
-	if err := app.activities.GraphqlClient.Query(context.Background(), &q1, variables); err != nil {
-		log.Fatal(err)
+	if err := app.activities.GraphqlClient.Query(context.Background(), &q, variables); err != nil {
 		return "", err
 	}
 
-	if len(q1.RunTimeConfiguration) == 0 {
+	if len(q.RunTimeConfiguration) == 0 {
 		return "", nil
 	}
 
-	return string(q1.RunTimeConfiguration[0].RequestId), nil
+	return string(q.RunTimeConfiguration[0].RequestId), nil
 }
 
+// TODO: execute this in temporal workflow when service.out server is up
 func (app *Application) updateConfigRunTimeStatus(requestId string, status string) error {
 	var mutation struct {
 		UpdateData struct {
@@ -236,10 +241,7 @@ func (app *Application) updateConfigRunTimeStatus(requestId string, status strin
 		"status": graphql.String(status),
 	}
 
-	log.Println(variables)
-
 	if err := app.activities.GraphqlClient.Mutate(context.Background(), &mutation, variables); err != nil {
-		log.Fatal(err)
 		return err
 	}
 

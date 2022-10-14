@@ -27,8 +27,8 @@ func main() {
 	w.RegisterWorkflow(workflow.ImportServiceWorkflow)
 	w.RegisterWorkflow(workflow.SignalImportServiceWorkflow)
 	w.RegisterActivity(&workflow.Activities{
-		MinioClient:   utils.SetMinioClient(),
-		GraphqlClient: utils.SetGraphqlClient(),
+		MinioClient:   utils.InitMinioClient(logger),
+		GraphqlClient: utils.InitGraphqlClient(logger),
 	})
 
 	err = w.Run(worker.InterruptCh())
