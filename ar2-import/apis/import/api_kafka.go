@@ -129,17 +129,17 @@ func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka
 				return err
 			}
 
-			status := &workflow.ImportSignal{}
-			status.Message.FileKey = minioMsg.Records[0].S3.Object.Key
-			status.Message.FileVersionID = minioMsg.Records[0].S3.Object.VersionId
+			signal := &workflow.ImportSignal{}
+			signal.Message.FileKey = minioMsg.Records[0].S3.Object.Key
+			signal.Message.FileVersionID = minioMsg.Records[0].S3.Object.VersionId
 
-			status.Message.RequestID, err = app.getRequestIdByFileKey(status.Message.FileKey)
+			signal.Message.RequestID, err = app.getRequestIdByFileKey(signal.Message.FileKey)
 			if err != nil {
 				logger.Error(err.Error())
 				return err
 			}
 
-			status, err = utils.ExecuteImportWorkflow(app.temporalClient, status.Message.RequestID, status)
+			signal, err = utils.ExecuteImportWorkflow(app.temporalClient, signal.Message.RequestID, signal)
 			if err != nil {
 				logger.Error(err.Error())
 				return err
@@ -147,9 +147,9 @@ func (app *Application) WriteMessages(ctx context.Context, messages <-chan kafka
 
 			var jsonMessages []jsonMessage
 
-			for _, line := range status.Message.Record {
+			for _, line := range signal.Message.Record {
 				jsonMessages = append(jsonMessages, jsonMessage{
-					RequestId: string(status.Message.RequestID),
+					RequestId: string(signal.Message.RequestID),
 					Record:    line,
 				})
 			}
@@ -206,7 +206,7 @@ func (app *Application) CommitImportMessages(ctx context.Context, messagesCommit
 	}
 }
 
-// this cannot be done inside temporal workflow
+// query to get requestId by file name
 func (app *Application) getRequestIdByFileKey(filekey string) (string, error) {
 	var q struct {
 		workflow.RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {fileKey: {_eq: $fileKey}}, status: {_eq: $status}})"`

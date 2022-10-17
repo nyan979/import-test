@@ -43,6 +43,7 @@ func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (string, er
 	return presignedURL.String(), nil
 }
 
+// check runtime status of file upload type. if its busy return that runtime requestId
 func (a *Activities) GetBusyRuntimeRequestId(uploadType string) (string, error) {
 	var q struct {
 		RunTimeConfiguration `graphql:"import_runtime(where: {configuration: {uploadType: {_eq: $uploadType}}}, distinct_on: status)"`

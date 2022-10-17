@@ -62,7 +62,7 @@ func InitMinioKafkaReader(logger temporalLog.Logger) *kafka.Reader {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{host + ":" + port},
 		Topic:   topic,
-		GroupID: "minio-consumer-group-1",
+		GroupID: "testing",
 	})
 
 	logger.Info("Initialized Minio Kafka Reader:", "brokerHost", host, "brokerPort", port, "topic", topic)
@@ -78,7 +78,7 @@ func InitImportKafkaReader(logger temporalLog.Logger) *kafka.Reader {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{host + ":" + port},
 		Topic:   topic,
-		GroupID: "import-consumer-group-1",
+		GroupID: "testing",
 	})
 
 	logger.Info("Initialized Service_Out Kafka Reader:", "brokerHost", host, "brokerPort", port, "topic", topic)
@@ -164,10 +164,11 @@ func InitTemporalConnection(logger temporalLog.Logger) (client.Client, error) {
 	})
 }
 
-func CreateImportWorkflow(c client.Client, status *workflow.ImportSignal) error {
+// initialize temporal import service workflow
+func CreateImportWorkflow(c client.Client, signal *workflow.ImportSignal) error {
 	workflowOptions := client.StartWorkflowOptions{
 		TaskQueue: "import-service",
-		ID:        status.Message.RequestID,
+		ID:        signal.Message.RequestID,
 	}
 	ctx := context.Background()
 
@@ -179,20 +180,21 @@ func CreateImportWorkflow(c client.Client, status *workflow.ImportSignal) error 
 	return nil
 }
 
-func ExecuteImportWorkflow(c client.Client, requestId string, status *workflow.ImportSignal) (*workflow.ImportSignal, error) {
+// execute external workflow to send/recieve signal channel from/to import service workflow
+func ExecuteImportWorkflow(c client.Client, requestId string, signal *workflow.ImportSignal) (*workflow.ImportSignal, error) {
 	workflowOptions := client.StartWorkflowOptions{
 		TaskQueue: "import-service",
 	}
 	ctx := context.Background()
 
-	we, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.SignalImportServiceWorkflow, requestId, status)
+	we, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.SignalImportServiceWorkflow, requestId, signal)
 	if err != nil {
-		return status, fmt.Errorf("unable to execute workflow: %w", err)
+		return signal, fmt.Errorf("unable to execute workflow: %w", err)
 	}
-	err = we.Get(ctx, &status)
+	err = we.Get(ctx, &signal)
 	if err != nil {
-		return status, err
+		return signal, err
 	}
 
-	return status, nil
+	return signal, nil
 }

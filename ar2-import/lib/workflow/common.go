@@ -113,12 +113,12 @@ const requestSignalName = "request-signal"
 const responseSignalName = "response-signal"
 
 type signalRequest struct {
-	Status            ImportSignal
+	Signal            ImportSignal
 	CallingWorkflowId string
 }
 
 type signalResponse struct {
-	Status ImportSignal
+	Signal ImportSignal
 	Error  string
 }
 
@@ -136,7 +136,7 @@ func SendErrorResponse(ctx workflow.Context, id string, err error) error {
 	).Get(ctx, nil)
 }
 
-func SendResponse(ctx workflow.Context, id string, status ImportSignal) error {
+func SendResponse(ctx workflow.Context, id string, signal ImportSignal) error {
 	logger := workflow.GetLogger(ctx)
 
 	logger.Info("Sending response", id)
@@ -146,11 +146,11 @@ func SendResponse(ctx workflow.Context, id string, status ImportSignal) error {
 		id,
 		"",
 		responseSignalName,
-		signalResponse{Status: status},
+		signalResponse{Signal: signal},
 	).Get(ctx, nil)
 }
 
-func SendRequest(ctx workflow.Context, targetWorkflowID string, status ImportSignal) error {
+func SendRequest(ctx workflow.Context, targetWorkflowID string, signal ImportSignal) error {
 	logger := workflow.GetLogger(ctx)
 
 	workflowID := workflow.GetInfo(ctx).WorkflowExecution.ID
@@ -164,7 +164,7 @@ func SendRequest(ctx workflow.Context, targetWorkflowID string, status ImportSig
 		requestSignalName,
 		signalRequest{
 			CallingWorkflowId: workflowID,
-			Status:            status,
+			Signal:            signal,
 		},
 	).Get(ctx, nil)
 }
@@ -186,7 +186,7 @@ func ReceiveResponse(ctx workflow.Context) (*ImportSignal, error) {
 		return nil, fmt.Errorf("%s", res.Error)
 	}
 
-	return &res.Status, nil
+	return &res.Signal, nil
 }
 
 func ReceiveRequest(ctx workflow.Context) (string, *ImportSignal) {
@@ -202,7 +202,7 @@ func ReceiveRequest(ctx workflow.Context) (string, *ImportSignal) {
 
 	logger.Info("Received request")
 
-	return req.CallingWorkflowId, &req.Status
+	return req.CallingWorkflowId, &req.Signal
 }
 
 func ReceiveRequestWithTimeOut(ctx workflow.Context, timeout time.Duration) (string, *ImportSignal) {
@@ -222,5 +222,5 @@ func ReceiveRequestWithTimeOut(ctx workflow.Context, timeout time.Duration) (str
 
 	logger.Info("Received request within timeout duration")
 
-	return req.CallingWorkflowId, &req.Status
+	return req.CallingWorkflowId, &req.Signal
 }
