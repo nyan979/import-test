@@ -1,5 +1,5 @@
 services:
-  # === === App Services === ===
+  # === === Import Service === ===
   ar2-import-api:
     container_name: ar2-import-api
     image: ${REPONAME}/ar2-import-api:${TAG}
@@ -31,6 +31,18 @@ services:
         delay: 10s
     networks:
       - ar-network
+  # === === Minio Service === ===
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./storage/minio:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server --address ":9000" --console-address ":9001" /data
 # === Network ===
 networks:
   ar-network:

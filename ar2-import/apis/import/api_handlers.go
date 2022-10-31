@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -54,49 +56,16 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// set requestId to track across go routine
-	app.activities.RequestId = requestId
-
-	// check if same uploadType is running. reject if true
-	status, err := app.activities.IsAnotherUploadRunning(uploadType, &requestId)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if status {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		payload := jsonResponse{
-			RequestId: requestId,
-		}
-		jsonPayload, _ := json.Marshal(payload)
-		w.Write(jsonPayload)
-		return
-	}
-
-	// insert row into runtime table based on uploadtype configuration
-	config, err := app.activities.ReadConfig(uploadType)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	err = app.activities.InsertConfigRunTime(requestId, string(config[0].Id))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	// minio client call to get presigned url and response back to browser
-	url, err := app.activities.GetPresignedUrl(config)
+
+	presignedURL, err := app.activities.MinioClient.PresignedPutObject(context.Background(),
+		os.Getenv("MINIO_BUCKET_NAME"), "testUpload.csv", time.Duration(300)*time.Second)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	payload := jsonResponse{
-		PresignedUrl: url.String(),
+		PresignedUrl: presignedURL.String(),
 		RequestId:    requestId,
 	}
 

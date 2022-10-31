@@ -7,22 +7,6 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// deprecated. not to use cors origin to * for development
-// func corsware(next httprouter.Handle) httprouter.Handle {
-// 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-
-// 		corsOrigin := os.Getenv("CORS_ALLOW_ORIGIN")
-
-// 		if len(corsOrigin) == 0 {
-// 			w.Header().Set("Access-Control-Allow-Origin", "*")
-// 		} else {
-// 			w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
-// 		}
-
-// 		next(w, r, ps)
-// 	}
-// }
-
 func (app *Application) routes() http.Handler {
 	router := httprouter.New()
 

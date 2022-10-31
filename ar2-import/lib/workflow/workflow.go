@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/hasura/go-graphql-client"
-	"github.com/minio/minio-go"
+	"github.com/minio/minio-go/v7"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -119,7 +119,7 @@ func (a *Activities) ReadConfig(uploadType string) (UploadTypeConfiguration, err
 }
 
 func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (*url.URL, error) {
-	presignedURL, err := a.MinioClient.PresignedPutObject(os.Getenv("MINIO_BUCKET_NAME"), string(config[0].FileKey)+".csv",
+	presignedURL, err := a.MinioClient.PresignedPutObject(context.Background(), os.Getenv("MINIO_BUCKET_NAME"), string(config[0].FileKey)+".csv",
 		time.Duration(config[0].UploadExpiryDurationInSec)*time.Second)
 	if err != nil {
 		log.Fatalln(err)
@@ -241,7 +241,7 @@ func (a *Activities) ReadMinioNotification(message kafka.Message) (*MinioMessage
 }
 
 func (a *Activities) ParseCSVToLine(filekey string) ([]string, error) {
-	object, err := a.MinioClient.GetObject(os.Getenv("MINIO_BUCKET_NAME"), filekey, minio.GetObjectOptions{})
+	object, err := a.MinioClient.GetObject(context.Background(), os.Getenv("MINIO_BUCKET_NAME"), filekey, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}

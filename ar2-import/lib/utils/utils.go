@@ -6,7 +6,8 @@ import (
 	"os"
 
 	"github.com/hasura/go-graphql-client"
-	"github.com/minio/minio-go"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -15,18 +16,21 @@ import (
 func SetMinioClient() *minio.Client {
 	host := os.Getenv("MINIO_HOST")
 	port := os.Getenv("MINIO_PORT")
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	useSSL := false
+	accessKeyID := os.Getenv("MINIO_ACCESS_KEY")
+	secretAccessKey := os.Getenv("MINIO_SECRET_KEY")
+	useSSL := true
 
 	endpoint := host + ":" + port
 
-	client, err := minio.New(endpoint, accessKey, secretKey, useSSL)
+	minioClient, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
+		Secure: useSSL,
+	})
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	return client
+	return minioClient
 }
 
 func SetGraphqlClient() *graphql.Client {
