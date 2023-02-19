@@ -5,7 +5,7 @@ import (
 	"mssfoobar/ar2-import/ar2-import/lib/utils"
 	"mssfoobar/ar2-import/ar2-import/lib/workflow"
 	"net/http"
-	"os"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -13,27 +13,22 @@ import (
 // json payload for presigned url response
 type jsonResponse struct {
 	PresignedUrl string `json:"presignedUrl"`
-	RequestId    string `json:"requestId"`
+	RequestId    string `json:"requestId,omitempty"`
 }
 
-// service version end point
-func (app *Application) getVersionInfo(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	buildVersion := os.Getenv("SERVICE_VERSION")
-	w.Header().Set("Content-Type", "application/json")
-	if len(buildVersion) == 0 {
-		buildVersion = "unknown"
-		w.WriteHeader(http.StatusNoContent)
-	} else {
-		w.WriteHeader(http.StatusOK)
-	}
-	w.Write([]byte(buildVersion))
-}
-
-// service health end point
-func (app *Application) getHealthInfo(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (app *Application) getLiveness(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Ok"))
+	w.Write([]byte("Live since " + app.timeLive))
+}
+
+func (app *Application) getReadiness(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	if app.timeReady == "" {
+		http.Error(w, "Server not ready", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Ready since " + app.timeReady))
 }
 
 // to recieve requestId and response with presigned Url
@@ -84,6 +79,62 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 
 	jsonPayload, _ := json.Marshal(payload)
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonPayload)
+}
+
+func (app *Application) upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	bucket := ps.ByName("bucket")
+	objectName := ps.ByName("objectName")
+	expire := ps.ByName("expire")
+	if bucket == "" || objectName == "" || expire == "" {
+		http.Error(w, "invalid parameter", http.StatusBadRequest)
+		return
+	}
+	duration, err := time.ParseDuration(expire)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	url, err := app.activities.PresignedUpload(bucket, objectName, duration)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var payload any
+	payload = jsonResponse{
+		PresignedUrl: url,
+	}
+	jsonPayload, _ := json.Marshal(payload)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonPayload)
+}
+
+func (app *Application) download(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	bucket := ps.ByName("bucket")
+	objectName := ps.ByName("objectName")
+	expire := ps.ByName("expire")
+	if bucket == "" || objectName == "" || expire == "" {
+		http.Error(w, "invalid parameter", http.StatusBadRequest)
+		return
+	}
+	duration, err := time.ParseDuration(expire)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	url, err := app.activities.PresignedDownload(bucket, objectName, duration)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var payload any
+	payload = jsonResponse{
+		PresignedUrl: url,
+	}
+	jsonPayload, _ := json.Marshal(payload)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonPayload)
