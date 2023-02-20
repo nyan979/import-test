@@ -1,10 +1,11 @@
 package workflow_test
 
 import (
-	"mssfoobar/ar2-import/ar2-import/lib/utils"
-	"mssfoobar/ar2-import/ar2-import/lib/workflow"
+	"mssfoobar/ar2-import/workflows/import/workflow"
 	"testing"
 
+	"github.com/hasura/go-graphql-client"
+	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/sdk/testsuite"
 )
@@ -17,8 +18,8 @@ func TestImportServiceWorkflow(t *testing.T) {
 	env.RegisterWorkflow(workflow.SignalImportServiceWorkflow)
 
 	env.RegisterActivity(workflow.Activities{
-		MinioClient:   utils.InitMinioClient(s.GetLogger()),
-		GraphqlClient: utils.InitGraphqlClient(s.GetLogger()),
+		MinioClient:   &minio.Client{},
+		GraphqlClient: &graphql.Client{},
 	})
 
 	requestId := "testRequestId"

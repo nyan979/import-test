@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"log"
@@ -15,28 +15,22 @@ func (app *Application) routes(logger logur.KVLogger) http.Handler {
 			next(w, r, ps)
 		}
 	}
-
 	router := httprouter.New()
-
 	router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Accept-Language, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
-
 		// Adjust status code to 204
 		w.WriteHeader(http.StatusNoContent)
 		log.Println(r)
 	})
-
 	router.HandleOPTIONS = true
-
 	// Set handler
 	router.GET("/import-file/:uploadType/:requestId", logware(app.getPresignedUrl, "getPresignedUrl"))
 	router.GET("/upload/bucket/:bucket/expire/:expire/objectName/*objectName", logware(app.upload, "upload"))
 	router.GET("/download/bucket/:bucket/expire/:expire/objectName/*objectName", logware(app.download, "download"))
 	router.GET("/info/liveness", logware(app.getLiveness, "getLiveness"))
 	router.GET("/info/readiness", logware(app.getReadiness, "getReadiness"))
-
 	return router
 }

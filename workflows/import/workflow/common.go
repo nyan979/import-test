@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/hasura/go-graphql-client"
-	"github.com/minio/minio-go"
+	"github.com/minio/minio-go/v7"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -124,9 +124,7 @@ type signalResponse struct {
 
 func SendErrorResponse(ctx workflow.Context, id string, err error) error {
 	logger := workflow.GetLogger(ctx)
-
 	logger.Info("Sending error response", id)
-
 	return workflow.SignalExternalWorkflow(
 		ctx,
 		id,
@@ -138,9 +136,7 @@ func SendErrorResponse(ctx workflow.Context, id string, err error) error {
 
 func SendResponse(ctx workflow.Context, id string, signal ImportSignal) error {
 	logger := workflow.GetLogger(ctx)
-
 	logger.Info("Sending response", id)
-
 	return workflow.SignalExternalWorkflow(
 		ctx,
 		id,
@@ -152,11 +148,8 @@ func SendResponse(ctx workflow.Context, id string, signal ImportSignal) error {
 
 func SendRequest(ctx workflow.Context, targetWorkflowID string, signal ImportSignal) error {
 	logger := workflow.GetLogger(ctx)
-
 	workflowID := workflow.GetInfo(ctx).WorkflowExecution.ID
-
 	logger.Info("Sending request", targetWorkflowID, workflowID)
-
 	return workflow.SignalExternalWorkflow(
 		ctx,
 		targetWorkflowID,
@@ -171,47 +164,32 @@ func SendRequest(ctx workflow.Context, targetWorkflowID string, signal ImportSig
 
 func ReceiveResponse(ctx workflow.Context) (*ImportSignal, error) {
 	logger := workflow.GetLogger(ctx)
-
 	var res signalResponse
-
 	ch := workflow.GetSignalChannel(ctx, responseSignalName)
-
 	logger.Info("Waiting for response")
-
 	ch.Receive(ctx, &res)
-
 	logger.Info("Received response")
 
 	if res.Error != "" {
 		return nil, fmt.Errorf("%s", res.Error)
 	}
-
 	return &res.Signal, nil
 }
 
 func ReceiveRequest(ctx workflow.Context) (string, *ImportSignal) {
 	logger := workflow.GetLogger(ctx)
-
 	var req signalRequest
-
 	ch := workflow.GetSignalChannel(ctx, requestSignalName)
-
 	logger.Info("Waiting for request")
-
 	ch.Receive(ctx, &req)
-
 	logger.Info("Received request")
-
 	return req.CallingWorkflowId, &req.Signal
 }
 
 func ReceiveRequestWithTimeOut(ctx workflow.Context, timeout time.Duration) (string, *ImportSignal) {
 	logger := workflow.GetLogger(ctx)
-
 	var req signalRequest
-
 	ch := workflow.GetSignalChannel(ctx, requestSignalName)
-
 	logger.Info("Waiting for request with timeout")
 
 	ok, more := ch.ReceiveWithTimeout(ctx, time.Second*time.Duration(timeout), &req)
@@ -221,6 +199,5 @@ func ReceiveRequestWithTimeOut(ctx workflow.Context, timeout time.Duration) (str
 	}
 
 	logger.Info("Received request within timeout duration")
-
 	return req.CallingWorkflowId, &req.Signal
 }

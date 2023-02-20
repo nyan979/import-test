@@ -1,9 +1,9 @@
-package main
+package server
 
 import (
 	"encoding/json"
-	"mssfoobar/ar2-import/ar2-import/lib/utils"
-	"mssfoobar/ar2-import/ar2-import/lib/workflow"
+	"mssfoobar/ar2-import/lib/utils"
+	"mssfoobar/ar2-import/workflows/import/workflow"
 	"net/http"
 	"time"
 
@@ -35,33 +35,27 @@ func (app *Application) getReadiness(w http.ResponseWriter, r *http.Request, _ h
 func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	uploadType := ps.ByName("uploadType")
 	requestId := ps.ByName("requestId")
-
 	// invalid request on empty http parameter
 	if requestId == ":requestId" || uploadType == ":uploadType" {
 		http.Error(w, "Invalid Request", http.StatusBadRequest)
 		return
 	}
-
 	signal := &workflow.ImportSignal{
 		Message: workflow.ImportMessage{
 			RequestID: requestId, UploadType: uploadType,
 		},
 	}
-
 	err := utils.CreateImportWorkflow(app.temporalClient, signal)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	signal, err = utils.ExecuteImportWorkflow(app.temporalClient, requestId, signal)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	var payload any
-
 	switch signal.Stage {
 	case workflow.UploadTypeStage:
 		http.Error(w, "No such upload type configuration", http.StatusBadRequest)
@@ -76,9 +70,7 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 			RequestId:    requestId,
 		}
 	}
-
 	jsonPayload, _ := json.Marshal(payload)
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonPayload)
@@ -97,7 +89,7 @@ func (app *Application) upload(w http.ResponseWriter, r *http.Request, ps httpro
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	url, err := app.activities.PresignedUpload(bucket, objectName, duration)
+	url, err := app.activities.PresignedUpload(bucket, duration, objectName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -125,7 +117,7 @@ func (app *Application) download(w http.ResponseWriter, r *http.Request, ps http
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	url, err := app.activities.PresignedDownload(bucket, objectName, duration)
+	url, err := app.activities.PresignedDownload(bucket, duration, objectName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
