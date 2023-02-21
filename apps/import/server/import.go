@@ -8,10 +8,6 @@ import (
 	"os"
 	"time"
 
-	graphqlService "mssfoobar/ar2-import/apps/graphql"
-	minioService "mssfoobar/ar2-import/apps/minio"
-	temporalService "mssfoobar/ar2-import/apps/temporal"
-
 	"github.com/joho/godotenv"
 	"go.temporal.io/sdk/client"
 	zapadapter "logur.dev/adapter/zap"
@@ -30,9 +26,10 @@ type ImportService struct {
 type Config struct {
 	port     string
 	logLevel string
-	minio    minioService.MinioConf
-	graphql  graphqlService.GraphqlConf
-	temporal temporalService.TemporalConf
+	minio    utils.MinioConf
+	graphql  utils.GraphqlConf
+	temporal utils.TemporalConf
+	nats     utils.NatsConf
 }
 
 func New() *ImportService {
@@ -42,11 +39,11 @@ func New() *ImportService {
 func (c *Config) Load() error {
 	err := godotenv.Load("../../.env")
 	if err != nil {
-		return err
+		log.Println(err)
 	}
 	c.port = os.Getenv("APP_PORT")
 	c.logLevel = os.Getenv("LOG_LEVEL")
-	c.minio = minioService.MinioConf{
+	c.minio = utils.MinioConf{
 		Endpoint:        os.Getenv("MINIO_ENDPOINT"),
 		UseSSL:          false,
 		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY"),
@@ -54,14 +51,18 @@ func (c *Config) Load() error {
 		BucketName:      os.Getenv("MINIO_BUCKET_NAME"),
 		HostName:        os.Getenv("MINIO_HOST_NAME"),
 	}
-	c.graphql = graphqlService.GraphqlConf{
+	c.graphql = utils.GraphqlConf{
 		HasuraAddress:  os.Getenv("HASURA_ADDRESS"),
 		GraphqlEndpint: os.Getenv("GQL_ENDPOINT"),
 		AdminKey:       os.Getenv("HASURA_GRAPHQL_ADMIN_SECRET"),
 	}
-	c.temporal = temporalService.TemporalConf{
+	c.temporal = utils.TemporalConf{
 		Endpoint:  os.Getenv("TEMPORAL_ENDPOINT"),
 		Namespace: os.Getenv("TEMPORAL_NAMESPACE"),
+	}
+	c.nats = utils.NatsConf{
+		URL:     os.Getenv("NATS_URL"),
+		Subject: os.Getenv("NATS_SUBJECT"),
 	}
 	return nil
 }
@@ -69,23 +70,39 @@ func (c *Config) Load() error {
 func (srv ImportService) Start(conf Config) {
 	timeLive := time.Now().Format(time.RFC3339)
 	logger := logur.LoggerToKV(zapadapter.New(utils.InitZapLogger(conf.logLevel)))
-	client := *temporalService.GetTemporalClient(conf.temporal, logger)
-	defer client.Close()
+
+	natsConn, err := utils.NewNatsConn(conf.nats, logger)
+	if err != nil {
+		logger.Error("Nats connection error", "Error", err)
+		os.Exit(1)
+	}
+
+	updateFileStatus, err := natsConn.Subscribe(conf.nats.Subject, srv.updateFileStatus)
+	if err != nil {
+		logger.Error("Nats subscription error", "Error", err)
+		os.Exit(1)
+	}
+	defer updateFileStatus.Unsubscribe()
+
+	temporalClient := *utils.GetTemporalClient(conf.temporal, logger)
+	defer temporalClient.Close()
+
 	srv = ImportService{
-		temporalClient: &client,
+		temporalClient: &temporalClient,
 		timeLive:       timeLive,
 		timeReady:      time.Now().Format(time.RFC3339),
 		activities: workflow.Activities{
-			MinioClient:   minioService.GetMinioClient(conf.minio, logger),
-			GraphqlClient: graphqlService.GetGraphqlClient(conf.graphql, logger),
+			MinioClient:   utils.GetMinioClient(conf.minio, logger),
+			GraphqlClient: utils.GetGraphqlClient(conf.graphql, logger),
 		},
 		logger: &logger,
 	}
 	logger.Info("HTTP Server Starting On Port:", "Port", conf.port)
 	port := ":" + conf.port
-	err := http.ListenAndServe(port, srv.routes(logger))
+	err = http.ListenAndServe(port, srv.routes(logger))
 	if err != nil {
-		log.Fatal("Failed to start server.", err)
+		logger.Error("Failed to start server.", "Error", err)
+		os.Exit(1)
 	}
 }
 

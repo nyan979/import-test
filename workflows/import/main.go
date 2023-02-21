@@ -11,17 +11,13 @@ import (
 
 	zapadapter "logur.dev/adapter/zap"
 	"logur.dev/logur"
-
-	graphqlService "mssfoobar/ar2-import/apps/graphql"
-	minioService "mssfoobar/ar2-import/apps/minio"
-	temporalService "mssfoobar/ar2-import/apps/temporal"
 )
 
 type Config struct {
 	logLevel string
-	minio    minioService.MinioConf
-	graphql  graphqlService.GraphqlConf
-	temporal temporalService.TemporalConf
+	minio    utils.MinioConf
+	graphql  utils.GraphqlConf
+	temporal utils.TemporalConf
 }
 
 func (c *Config) load() error {
@@ -30,7 +26,7 @@ func (c *Config) load() error {
 		return err
 	}
 	c.logLevel = os.Getenv("LOG_LEVEL")
-	c.minio = minioService.MinioConf{
+	c.minio = utils.MinioConf{
 		Endpoint:        os.Getenv("MINIO_ENDPOINT"),
 		UseSSL:          false,
 		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY"),
@@ -38,12 +34,12 @@ func (c *Config) load() error {
 		BucketName:      os.Getenv("MINIO_BUCKET_NAME"),
 		HostName:        os.Getenv("MINIO_HOST_NAME"),
 	}
-	c.graphql = graphqlService.GraphqlConf{
+	c.graphql = utils.GraphqlConf{
 		HasuraAddress:  os.Getenv("HASURA_ADDRESS"),
 		GraphqlEndpint: os.Getenv("GQL_ENDPOINT"),
 		AdminKey:       os.Getenv("HASURA_GRAPHQL_ADMIN_SECRET"),
 	}
-	c.temporal = temporalService.TemporalConf{
+	c.temporal = utils.TemporalConf{
 		Endpoint:  os.Getenv("TEMPORAL_ENDPOINT"),
 		Namespace: os.Getenv("TEMPORAL_NAMESPACE"),
 	}
@@ -57,7 +53,7 @@ func main() {
 		log.Fatal("Environment file loading failed.", err)
 	}
 	logger := logur.LoggerToKV(zapadapter.New(utils.InitZapLogger(conf.logLevel)))
-	temporalClient := *temporalService.GetTemporalClient(conf.temporal, logger)
+	temporalClient := *utils.GetTemporalClient(conf.temporal, logger)
 	if err != nil {
 		logger.Error(err.Error())
 	}
@@ -66,8 +62,8 @@ func main() {
 	w.RegisterWorkflow(workflow.ImportServiceWorkflow)
 	w.RegisterWorkflow(workflow.SignalImportServiceWorkflow)
 	w.RegisterActivity(&workflow.Activities{
-		MinioClient:   minioService.GetMinioClient(conf.minio, logger),
-		GraphqlClient: graphqlService.GetGraphqlClient(conf.graphql, logger),
+		MinioClient:   utils.GetMinioClient(conf.minio, logger),
+		GraphqlClient: utils.GetGraphqlClient(conf.graphql, logger),
 	})
 
 	err = w.Run(worker.InterruptCh())

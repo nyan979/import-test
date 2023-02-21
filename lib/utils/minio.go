@@ -1,10 +1,10 @@
-package minio
+package utils
 
 import (
 	"context"
 	"os"
 
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"logur.dev/logur"
 )
@@ -16,7 +16,6 @@ type MinioConf struct {
 	SecretAccessKey string
 	BucketName      string
 	HostName        string
-	NatsTopic       string
 }
 
 func GetMinioClient(config MinioConf, logger logur.KVLoggerFacade) *minio.Client {

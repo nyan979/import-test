@@ -1,5 +1,6 @@
 package server
 
+// Deprecated
 // import (
 // 	"context"
 // 	"encoding/json"
