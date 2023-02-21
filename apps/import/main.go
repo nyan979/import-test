@@ -14,8 +14,8 @@ func main() {
 	if err != nil {
 		log.Fatal("Environment file loading failed.", err)
 	}
-	app := server.New()
-	app.Start(conf)
+	importService := server.New()
+	importService.Start(conf)
 
 	// Press Ctrl+C to exit the process
 	quitCh := make(chan os.Signal, 1)

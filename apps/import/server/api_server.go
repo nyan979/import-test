@@ -18,11 +18,12 @@ import (
 	"logur.dev/logur"
 )
 
-type Application struct {
+type ImportService struct {
 	timeLive       string
 	timeReady      string
-	temporalClient client.Client
+	temporalClient *client.Client
 	activities     workflow.Activities
+	logger         *logur.KVLoggerFacade
 	conf           Config
 }
 
@@ -34,8 +35,8 @@ type Config struct {
 	temporal temporalService.TemporalConf
 }
 
-func New() *Application {
-	return &Application{}
+func New() *ImportService {
+	return &ImportService{}
 }
 
 func (c *Config) Load() error {
@@ -65,28 +66,27 @@ func (c *Config) Load() error {
 	return nil
 }
 
-func (app Application) Start(conf Config) {
+func (srv ImportService) Start(conf Config) {
 	timeLive := time.Now().Format(time.RFC3339)
 	logger := logur.LoggerToKV(zapadapter.New(utils.InitZapLogger(conf.logLevel)))
-	// client := *temporalService.GetTemporalClient(conf.temporal, logger)
-	// defer client.Close()
-	app = Application{
-		// temporalClient: client,
-		timeLive:  timeLive,
-		timeReady: time.Now().Format(time.RFC3339),
+	client := *temporalService.GetTemporalClient(conf.temporal, logger)
+	defer client.Close()
+	srv = ImportService{
+		temporalClient: &client,
+		timeLive:       timeLive,
+		timeReady:      time.Now().Format(time.RFC3339),
 		activities: workflow.Activities{
-			MinioClient: minioService.GetMinioClient(conf.minio, logger),
-			// GraphqlClient: graphqlService.GetGraphqlClient(conf.graphql, logger),
+			MinioClient:   minioService.GetMinioClient(conf.minio, logger),
+			GraphqlClient: graphqlService.GetGraphqlClient(conf.graphql, logger),
 		},
+		logger: &logger,
 	}
 	logger.Info("HTTP Server Starting On Port:", "Port", conf.port)
 	port := ":" + conf.port
-	go func() {
-		err := http.ListenAndServe(port, app.routes(logger))
-		if err != nil {
-			log.Fatal("Failed to start server.", err)
-		}
-	}()
+	err := http.ListenAndServe(port, srv.routes(logger))
+	if err != nil {
+		log.Fatal("Failed to start server.", err)
+	}
 }
 
 // Deprecated

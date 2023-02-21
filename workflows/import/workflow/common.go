@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/hasura/go-graphql-client"
@@ -113,12 +112,12 @@ const requestSignalName = "request-signal"
 const responseSignalName = "response-signal"
 
 type signalRequest struct {
-	Signal            ImportSignal
+	Signal            *ImportSignal
 	CallingWorkflowId string
 }
 
 type signalResponse struct {
-	Signal ImportSignal
+	Signal *ImportSignal
 	Error  string
 }
 
@@ -134,7 +133,7 @@ func SendErrorResponse(ctx workflow.Context, id string, err error) error {
 	).Get(ctx, nil)
 }
 
-func SendResponse(ctx workflow.Context, id string, signal ImportSignal) error {
+func SendResponse(ctx workflow.Context, id string, signal *ImportSignal) error {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Sending response", id)
 	return workflow.SignalExternalWorkflow(
@@ -146,7 +145,7 @@ func SendResponse(ctx workflow.Context, id string, signal ImportSignal) error {
 	).Get(ctx, nil)
 }
 
-func SendRequest(ctx workflow.Context, targetWorkflowID string, signal ImportSignal) error {
+func SendRequest(ctx workflow.Context, targetWorkflowID string, signal *ImportSignal) error {
 	logger := workflow.GetLogger(ctx)
 	workflowID := workflow.GetInfo(ctx).WorkflowExecution.ID
 	logger.Info("Sending request", targetWorkflowID, workflowID)
@@ -169,11 +168,10 @@ func ReceiveResponse(ctx workflow.Context) (*ImportSignal, error) {
 	logger.Info("Waiting for response")
 	ch.Receive(ctx, &res)
 	logger.Info("Received response")
-
 	if res.Error != "" {
 		return nil, fmt.Errorf("%s", res.Error)
 	}
-	return &res.Signal, nil
+	return res.Signal, nil
 }
 
 func ReceiveRequest(ctx workflow.Context) (string, *ImportSignal) {
@@ -183,7 +181,7 @@ func ReceiveRequest(ctx workflow.Context) (string, *ImportSignal) {
 	logger.Info("Waiting for request")
 	ch.Receive(ctx, &req)
 	logger.Info("Received request")
-	return req.CallingWorkflowId, &req.Signal
+	return req.CallingWorkflowId, req.Signal
 }
 
 func ReceiveRequestWithTimeOut(ctx workflow.Context, timeout time.Duration) (string, *ImportSignal) {
@@ -191,13 +189,11 @@ func ReceiveRequestWithTimeOut(ctx workflow.Context, timeout time.Duration) (str
 	var req signalRequest
 	ch := workflow.GetSignalChannel(ctx, requestSignalName)
 	logger.Info("Waiting for request with timeout")
-
 	ok, more := ch.ReceiveWithTimeout(ctx, time.Second*time.Duration(timeout), &req)
 	if !ok && more {
-		log.Println("REQUEST TIMEOUT")
+		logger.Info("Request timeout. Import failed.")
 		return "", nil
 	}
-
 	logger.Info("Received request within timeout duration")
-	return req.CallingWorkflowId, &req.Signal
+	return req.CallingWorkflowId, req.Signal
 }

@@ -8,7 +8,7 @@ import (
 	"logur.dev/logur"
 )
 
-func (app *Application) routes(logger logur.KVLogger) http.Handler {
+func (srv *ImportService) routes(logger logur.KVLogger) http.Handler {
 	logware := func(next httprouter.Handle, endpoint string) httprouter.Handle {
 		return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 			logger.Debug("Endpoint called: " + endpoint)
@@ -27,10 +27,10 @@ func (app *Application) routes(logger logur.KVLogger) http.Handler {
 	})
 	router.HandleOPTIONS = true
 	// Set handler
-	router.GET("/import-file/:uploadType/:requestId", logware(app.getPresignedUrl, "getPresignedUrl"))
-	router.GET("/upload/bucket/:bucket/expire/:expire/objectName/*objectName", logware(app.upload, "upload"))
-	router.GET("/download/bucket/:bucket/expire/:expire/objectName/*objectName", logware(app.download, "download"))
-	router.GET("/info/liveness", logware(app.getLiveness, "getLiveness"))
-	router.GET("/info/readiness", logware(app.getReadiness, "getReadiness"))
+	router.GET("/import-file/:uploadType/:requestId", logware(srv.getPresignedUrl, "getPresignedUrl"))
+	router.GET("/upload/bucket/:bucket/expire/:expire/objectName/*objectName", logware(srv.upload, "upload"))
+	router.GET("/download/bucket/:bucket/expire/:expire/objectName/*objectName", logware(srv.download, "download"))
+	router.GET("/info/liveness", logware(srv.getLiveness, "getLiveness"))
+	router.GET("/info/readiness", logware(srv.getReadiness, "getReadiness"))
 	return router
 }

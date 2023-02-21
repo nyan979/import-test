@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log"
 	"mssfoobar/ar2-import/lib/utils"
 	"mssfoobar/ar2-import/workflows/import/workflow"
 	"net/http"
@@ -16,23 +17,24 @@ type jsonResponse struct {
 	RequestId    string `json:"requestId,omitempty"`
 }
 
-func (app *Application) getLiveness(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (srv *ImportService) getLiveness(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Live since " + app.timeLive))
+	w.Write([]byte("Live since " + srv.timeLive))
 }
 
-func (app *Application) getReadiness(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	if app.timeReady == "" {
+func (srv *ImportService) getReadiness(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	if srv.timeReady == "" {
 		http.Error(w, "Server not ready", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Ready since " + app.timeReady))
+	w.Write([]byte("Ready since " + srv.timeReady))
 }
 
 // to recieve requestId and response with presigned Url
-func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (srv *ImportService) getPresignedUrl(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	logger := *srv.logger
 	uploadType := ps.ByName("uploadType")
 	requestId := ps.ByName("requestId")
 	// invalid request on empty http parameter
@@ -45,12 +47,13 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 			RequestID: requestId, UploadType: uploadType,
 		},
 	}
-	err := utils.CreateImportWorkflow(app.temporalClient, signal)
+	err := utils.CreateImportWorkflow(*srv.temporalClient, signal)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Println(err)
 		return
 	}
-	signal, err = utils.ExecuteImportWorkflow(app.temporalClient, requestId, signal)
+	signal, err = utils.ExecuteImportWorkflow(*srv.temporalClient, requestId, signal)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -58,13 +61,16 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 	var payload any
 	switch signal.Stage {
 	case workflow.UploadTypeStage:
-		http.Error(w, "No such upload type configuration", http.StatusBadRequest)
+		logger.Info("Invalid upload type configuration")
+		http.Error(w, "Invalid upload type configuration", http.StatusBadRequest)
 		return
 	case workflow.ServiceBusyStage:
+		logger.Info("Service unavailable. Same upload type configuration in progress.")
 		payload = jsonResponse{
 			RequestId: signal.Message.RequestID,
 		}
 	case workflow.PresignedUrlStage:
+		logger.Info("Presigned url acquired")
 		payload = jsonResponse{
 			PresignedUrl: signal.Message.URL,
 			RequestId:    requestId,
@@ -76,21 +82,25 @@ func (app *Application) getPresignedUrl(w http.ResponseWriter, r *http.Request, 
 	w.Write(jsonPayload)
 }
 
-func (app *Application) upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (srv *ImportService) upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	logger := *srv.logger
 	bucket := ps.ByName("bucket")
 	objectName := ps.ByName("objectName")
 	expire := ps.ByName("expire")
 	if bucket == "" || objectName == "" || expire == "" {
+		logger.Info("Invalid path parameter")
 		http.Error(w, "invalid parameter", http.StatusBadRequest)
 		return
 	}
 	duration, err := time.ParseDuration(expire)
 	if err != nil {
+		logger.Info("Invalid expire time. Valid time units are ns, us (or µs), ms, s, m, h.", "Error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	url, err := app.activities.PresignedUpload(bucket, duration, objectName)
+	url, err := srv.activities.PresignedUpload(bucket, duration, objectName)
 	if err != nil {
+		logger.Info("Unable to create presigned url", "Error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -104,21 +114,25 @@ func (app *Application) upload(w http.ResponseWriter, r *http.Request, ps httpro
 	w.Write(jsonPayload)
 }
 
-func (app *Application) download(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (srv *ImportService) download(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	logger := *srv.logger
 	bucket := ps.ByName("bucket")
 	objectName := ps.ByName("objectName")
 	expire := ps.ByName("expire")
 	if bucket == "" || objectName == "" || expire == "" {
+		logger.Info("Invalid path parameter")
 		http.Error(w, "invalid parameter", http.StatusBadRequest)
 		return
 	}
 	duration, err := time.ParseDuration(expire)
 	if err != nil {
+		logger.Info("Invalid expire time. Valid time units are ns, us (or µs), ms, s, m, h.", "Error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	url, err := app.activities.PresignedDownload(bucket, duration, objectName)
+	url, err := srv.activities.PresignedDownload(bucket, duration, objectName)
 	if err != nil {
+		logger.Info("Unable to create presigned url", "Error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

@@ -13,8 +13,7 @@ type TemporalConf struct {
 }
 
 func GetTemporalClient(conf TemporalConf, logger logur.KVLoggerFacade) *client.Client {
-	logger.Info("Temporal Connection Details:", "temporalEndpoint",
-		conf.Endpoint, "temporalNamespace", conf.Namespace)
+	logger.Info("--- Connecting to Temporal ---")
 	client, err := client.Dial(client.Options{
 		HostPort:  conf.Endpoint,
 		Namespace: conf.Namespace,
@@ -24,5 +23,7 @@ func GetTemporalClient(conf TemporalConf, logger logur.KVLoggerFacade) *client.C
 		logger.Error("Unable to connect to temporal: %s\n", err)
 		os.Exit(1)
 	}
+	logger.Info("Initialized Temporal Client:", "temporalEndpoint",
+		conf.Endpoint, "temporalNamespace", conf.Namespace)
 	return &client
 }

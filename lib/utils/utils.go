@@ -103,12 +103,10 @@ func CreateImportWorkflow(c client.Client, signal *workflow.ImportSignal) error 
 		ID:        signal.Message.RequestID,
 	}
 	ctx := context.Background()
-
 	_, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.ImportServiceWorkflow)
 	if err != nil {
 		return fmt.Errorf("unable to execute order workflow: %w", err)
 	}
-
 	return nil
 }
 
@@ -118,7 +116,6 @@ func ExecuteImportWorkflow(c client.Client, requestId string, signal *workflow.I
 		TaskQueue: "import-service",
 	}
 	ctx := context.Background()
-
 	we, err := c.ExecuteWorkflow(ctx, workflowOptions, workflow.SignalImportServiceWorkflow, requestId, signal)
 	if err != nil {
 		return signal, fmt.Errorf("unable to execute workflow: %w", err)
@@ -127,6 +124,5 @@ func ExecuteImportWorkflow(c client.Client, requestId string, signal *workflow.I
 	if err != nil {
 		return signal, err
 	}
-
 	return signal, nil
 }
