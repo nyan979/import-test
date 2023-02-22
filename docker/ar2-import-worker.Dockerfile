@@ -1,22 +1,19 @@
-FROM golang:1.18.1-alpine3.15 AS build
+FROM golang:1.18.1-alpine as builder
 
-COPY ./ar2-import/workers/import /app/ar2-import/workers/import
-COPY ./ar2-import/lib/utils /app/ar2-import/lib/utils
-COPY ./ar2-import/lib/workflow /app/ar2-import/lib/workflow
-COPY ./go.mod /app/go.mod
-COPY ./go.sum /app/go.sum
+WORKDIR /ar2-import
 
-WORKDIR /app
-RUN pwd
-ARG CGO_ENABLED=0
+COPY go.mod go.mod
+COPY go.sum go.sum
 RUN go mod download
 
-WORKDIR /app/ar2-import/workers/import
-RUN go build -o /app/server
+COPY lib/ lib/
+COPY workflows/ workflows/
+COPY apps/ apps/
 
-FROM alpine:3.15
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -installsuffix cgo -o /ar2-import/worker ./workflows/import
 
-WORKDIR /app
-COPY --from=build /app/server /app/server
+FROM alpine
 
-CMD ["./server"]
+COPY --from=builder /ar2-import/worker /worker
+
+CMD ["./worker"]

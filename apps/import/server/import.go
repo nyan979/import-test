@@ -36,35 +36,32 @@ func New() *ImportService {
 	return &ImportService{}
 }
 
-func (c *Config) Load() error {
-	err := godotenv.Load("../../.env")
-	if err != nil {
-		log.Println(err)
-	}
+func (c *Config) Load(confFile string) {
+	godotenv.Load(confFile)
 	c.port = os.Getenv("APP_PORT")
 	c.logLevel = os.Getenv("LOG_LEVEL")
 	c.minio = utils.MinioConf{
-		Endpoint:        os.Getenv("MINIO_ENDPOINT"),
+		Endpoint:        os.Getenv("MINIO_HOST") + ":" + os.Getenv("MINIO_PORT"),
 		UseSSL:          false,
 		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY"),
 		SecretAccessKey: os.Getenv("MINIO_SECRET_KEY"),
 		BucketName:      os.Getenv("MINIO_BUCKET_NAME"),
-		HostName:        os.Getenv("MINIO_HOST_NAME"),
+		PublicHostName:  os.Getenv("MINIO_HOST_PUBLIC"),
 	}
 	c.graphql = utils.GraphqlConf{
-		HasuraAddress:  os.Getenv("HASURA_ADDRESS"),
+		HasuraAddress:  os.Getenv("HASURA_HOST") + ":" + os.Getenv("HASURA_PORT"),
 		GraphqlEndpint: os.Getenv("GQL_ENDPOINT"),
 		AdminKey:       os.Getenv("HASURA_GRAPHQL_ADMIN_SECRET"),
 	}
 	c.temporal = utils.TemporalConf{
-		Endpoint:  os.Getenv("TEMPORAL_ENDPOINT"),
+		Endpoint:  os.Getenv("TEMPORAL_HOST") + ":" + os.Getenv("TEMPORAL_PORT"),
 		Namespace: os.Getenv("TEMPORAL_NAMESPACE"),
 	}
 	c.nats = utils.NatsConf{
 		URL:     os.Getenv("NATS_URL"),
 		Subject: os.Getenv("NATS_SUBJECT"),
 	}
-	return nil
+	log.Println(c)
 }
 
 func (srv ImportService) Start(conf Config) {

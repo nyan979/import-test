@@ -15,7 +15,7 @@ type MinioConf struct {
 	AccessKeyID     string
 	SecretAccessKey string
 	BucketName      string
-	HostName        string
+	PublicHostName  string
 }
 
 func GetMinioClient(config MinioConf, logger logur.KVLoggerFacade) *minio.Client {

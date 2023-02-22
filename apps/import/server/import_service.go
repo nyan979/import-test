@@ -39,6 +39,7 @@ func (srv *ImportService) getReadiness(w http.ResponseWriter, r *http.Request, _
 // to recieve requestId and response with presigned Url
 func (srv *ImportService) getPresignedUrl(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	logger := *srv.logger
+	client := *srv.temporalClient
 	uploadType := ps.ByName("uploadType")
 	requestId := ps.ByName("requestId")
 	// invalid request on empty http parameter
@@ -51,13 +52,13 @@ func (srv *ImportService) getPresignedUrl(w http.ResponseWriter, r *http.Request
 			RequestID: requestId, UploadType: uploadType,
 		},
 	}
-	err := createImportWorkflow(*srv.temporalClient, signal)
+	err := createImportWorkflow(client, signal)
 	if err != nil {
 		logger.Error("Cannot create workflow", "Error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	signal, err = executeImportWorkflow(*srv.temporalClient, requestId, signal)
+	signal, err = executeImportWorkflow(client, requestId, signal)
 	if err != nil {
 		logger.Error("Cannot execute workflow", "Error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -66,10 +67,18 @@ func (srv *ImportService) getPresignedUrl(w http.ResponseWriter, r *http.Request
 	var payload any
 	switch signal.Stage {
 	case workflow.UploadTypeStage:
-		logger.Error("Invalid upload type configuration")
+		err := client.CancelWorkflow(context.Background(), requestId, "")
+		if err != nil {
+			logger.Error("Unable to cancel workflow", "Error", err)
+		}
+		logger.Info("Invalid upload type configuration")
 		http.Error(w, "Invalid upload type configuration", http.StatusBadRequest)
 		return
 	case workflow.ServiceBusyStage:
+		err := client.CancelWorkflow(context.Background(), requestId, "")
+		if err != nil {
+			logger.Error("Unable to cancel workflow", "Error", err)
+		}
 		logger.Info("Service unavailable. Same upload type configuration in progress.")
 		payload = jsonResponse{
 			RequestId: signal.Message.RequestID,

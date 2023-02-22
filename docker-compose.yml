@@ -1,6 +1,31 @@
 version: "3.7"
 
 services:
+  # === === Temporal Worker === ===
+  ar2-import-worker:
+    image: elzdar/ar2-import-worker:latest
+    build:
+      dockerfile: ./docker/ar2-import-worker.Dockerfile
+      context: .
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL}
+      - HASURA_HOST=${HASURA_HOST}
+      - HASURA_PORT=${HASURA_PORT}
+      - GQL_ENDPOINT=${GQL_ENDPOINT}
+      - HASURA_GRAPHQL_ADMIN_SECRET=${HASURA_GRAPHQL_ADMIN_SECRET}
+      - MINIO_HOST=${MINIO_HOST}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - MINIO_HOST_PUBLIC=${MINIO_HOST_PUBLIC}
+      - TEMPORAL_HOST=${TEMPORAL_HOST}
+      - TEMPORAL_PORT=${TEMPORAL_PORT}
+      - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE}
+    deploy:
+      restart_policy:
+        condition: on-failure
+
   # === === App Services === ===
   ar2-import:
     image: elzdar/ar2-import:latest
@@ -10,27 +35,25 @@ services:
     environment:
       - APP_PORT=${APP_PORT}
       - LOG_LEVEL=${LOG_LEVEL}
-      - HASURA_ADDRESS=${HASURA_ADDRESS}
+      - HASURA_HOST=${HASURA_HOST}
+      - HASURA_PORT=${HASURA_PORT}
       - GQL_ENDPOINT=${GQL_ENDPOINT}
       - HASURA_GRAPHQL_ADMIN_SECRET=${HASURA_GRAPHQL_ADMIN_SECRET}
-      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_HOST=${MINIO_HOST}
+      - MINIO_PORT=${MINIO_PORT}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - MINIO_HOST_PUBLIC=${MINIO_HOST_PUBLIC}
       - NATS_URL=${NATS_URL}
       - NATS_SUBJECT=${NATS_SUBJECT}
-      - TEMPORAL_ENDPOINT=${TEMPORAL_ENDPOINT}
+      - TEMPORAL_HOST=${TEMPORAL_HOST}
+      - TEMPORAL_PORT=${TEMPORAL_PORT}
       - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE}
     ports:
       - ${APP_PORT}:${APP_PORT}
     deploy:
       restart_policy:
         condition: on-failure
-    networks:
-      - ar-network
-      
-# === Network ===
-networks:
-  ar-network:
-    driver: bridge
-    name: ar-network
+    depends_on:
+      - ar2-import-worker

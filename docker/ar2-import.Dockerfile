@@ -15,6 +15,5 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -installsuf
 FROM alpine
 
 COPY --from=builder /ar2-import/import /import
-COPY ./.env ./.env
 
 CMD ["./import"]

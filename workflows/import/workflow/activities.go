@@ -37,7 +37,7 @@ func (a *Activities) GetPresignedUrl(config UploadTypeConfiguration) (string, er
 		log.Fatalln(err)
 		return "", err
 	}
-	// url.Host = os.Getenv("MINIO_HOST_NAME")
+	url.Host = os.Getenv("MINIO_HOST_PUBLIC")
 	return url.String(), nil
 }
 
@@ -47,7 +47,7 @@ func (a *Activities) PresignedUpload(bucket string, expire time.Duration, object
 		log.Fatalln(err)
 		return "", err
 	}
-	url.Host = os.Getenv("MINIO_HOST_NAME")
+	url.Host = os.Getenv("MINIO_HOST_PUBLIC")
 	return url.String(), nil
 }
 
@@ -57,7 +57,7 @@ func (a *Activities) PresignedDownload(bucket string, expire time.Duration, obje
 		log.Fatalln(err)
 		return "", err
 	}
-	url.Host = os.Getenv("MINIO_HOST_NAME")
+	url.Host = os.Getenv("MINIO_HOST_PUBLIC")
 	return url.String(), nil
 }
 

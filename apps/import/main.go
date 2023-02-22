@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"flag"
 	server "mssfoobar/ar2-import/apps/import/server"
 	"os"
 	"os/signal"
@@ -9,11 +9,18 @@ import (
 )
 
 func main() {
-	conf := server.Config{}
-	err := conf.Load()
-	if err != nil {
-		log.Fatal("Environment file loading failed.", err)
+	var confFile string
+	flag.StringVar(&confFile, "c", "../../.env", "environment file")
+	flag.Parse()
+
+	if confFile == "" {
+		flag.PrintDefaults()
+		return
 	}
+
+	conf := server.Config{}
+	conf.Load(confFile)
+
 	importService := server.New()
 	importService.Start(conf)
 
