@@ -1,7 +1,7 @@
 name: ar2-import - Main CI
 
 env:
-  image_prefix: 991204835536.dkr.ecr.ap-southeast-1.amazonaws.com/ar2
+  image_prefix: ghcr.io/mssfoobar/ar2-import
   manifest_repo: mssfoobar/hydra
   manifest_branch: app-of-apps
   src_branch: main
@@ -52,6 +52,7 @@ jobs:
 
           matrixStringifiedObject='{"include":['
           matrixStringifiedObject="${matrixStringifiedObject}"'{"pod-name":"ar2-import","app-name":"ar2-import-api"},'
+          matrixStringifiedObject="${matrixStringifiedObject}"'{"pod-name":"ar2-import","app-name":"ar2-import-worker"},'
           matrixStringifiedObject="${matrixStringifiedObject}"']}'
 
           echo "matrixStringifiedObject: $matrixStringifiedObject"
@@ -103,16 +104,12 @@ jobs:
         ref: ${{ env.src_branch }}
         path: ./SRC
 
-    - name: "🔧 Configure access to Image Repository"
-      uses: aws-actions/configure-aws-credentials@v1
+    - name: "Log in to the Container registry"
+      uses: docker/login-action@v2.1.0
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ap-southeast-1
-
-    - name: "🔧 Login to Image Repository"
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
+        registry: ${{ needs.prepare.outputs.registry }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.PAT }}
 
     - name: "🔧 Set pod version info"
       run: |
@@ -165,10 +162,11 @@ jobs:
     - name: "☁️ Checkout manifest"
       uses: actions/checkout@v3
       with:
-        ref: ${{ env.manifest_branch }}
         repository: ${{ env.manifest_repo }}
+        path: ./SRC
         token: ${{ secrets.PAT }}
-        path: ./MFT
+        fetch-depth: 0
+        persist-credentials: true
 
     - name: "📂 download artifacts of current build"
       uses: actions/download-artifact@v3
@@ -207,18 +205,18 @@ jobs:
         repository: ${{ env.manifest_repo }}
         token: ${{ secrets.PAT }}
 
-  notify:
-    name: Notify on Slack
-    runs-on: ubuntu-latest
-    needs: [release]
+  # notify:
+  #   name: Notify on Slack
+  #   runs-on: ubuntu-latest
+  #   needs: [release]
 
-    # if: ${{ github.base_ref == 'main' && github.event_name == 'pull_request' }}
-    steps:
-    - uses: 8398a7/action-slack@v3
-      with:
-        status: ${{ job.status }}
-        # fields: all
-        fields: repo,commit,message,author,workflow
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-      if: always()
+  #   # if: ${{ github.base_ref == 'main' && github.event_name == 'pull_request' }}
+  #   steps:
+  #   - uses: 8398a7/action-slack@v3
+  #     with:
+  #       status: ${{ job.status }}
+  #       # fields: all
+  #       fields: repo,commit,message,author,workflow
+  #     env:
+  #       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  #     if: always()

@@ -3,7 +3,8 @@ version: "3.7"
 services:
   # === === Temporal Worker === ===
   ar2-import-worker:
-    image: elzdar/ar2-import-worker:latest
+    container_name: ar2-import-worker
+    image: ${REPONAME}/ar2-import-worker:${TAG}
     build:
       dockerfile: ./docker/ar2-import-worker.Dockerfile
       context: .
@@ -27,8 +28,9 @@ services:
         condition: on-failure
 
   # === === App Services === ===
-  ar2-import:
-    image: elzdar/ar2-import:latest
+  ar2-import-api:
+    container_name: ar2-import-api
+    image: ${REPONAME}/ar2-import-api:${TAG}
     build:
       dockerfile: ./docker/ar2-import.Dockerfile
       context: .
