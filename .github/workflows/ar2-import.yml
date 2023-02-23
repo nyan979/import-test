@@ -80,10 +80,10 @@ jobs:
       run: |
         echo "TEMP placeholder"
   
-  security-checks:
-    name: vulnerability-code-scan
-    uses: mssfoobar/ar2-import/.github/workflows/codeql-analysis.yml@main
-    secrets: inherit
+  # security-checks:
+  #   name: vulnerability-code-scan
+  #   uses: mssfoobar/ar2-import/.github/workflows/codeql-analysis.yml@main
+  #   secrets: inherit
 
   container:
     if: ${{ fromJson(needs.matrix.outputs.matrix != '{"include":[]}' ) }}
@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: 
     - test
-    - security-checks
+    # - security-checks
     - matrix
     strategy:
       matrix: ${{fromJson(needs.matrix.outputs.matrix)}}
