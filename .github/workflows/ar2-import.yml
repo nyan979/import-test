@@ -2,8 +2,8 @@ name: ar2-import - Main CI
 
 env:
   image_prefix: ghcr.io/mssfoobar/ar2-import
-  manifest_repo: mssfoobar/hydra
-  manifest_branch: app-of-apps
+  manifest_repo: mssfoobar/ar2-infra
+  manifest_branch: main
   src_branch: main
   org_name: mssfoobar
   app_name: ar2-import
@@ -187,25 +187,25 @@ jobs:
         done
         cd ..
 
-        valuesFile=./MFT/argocd/ar2/helm/${{ env.app_name }}/values.yaml
+        valuesFile=./MFT/argocd/dev2/helm/${{ env.app_name }}/values.yaml
         oldTag=$(cat $valuesFile | grep tag: | head -n 1 | awk '{print $2}' | tr -d '\n')
         echo "** $valuesFile ::: replacing $oldTag with ${newTag}"
         sed -i "s|$oldTag|$newTag|g" $valuesFile
 
-    - name: "🖃 Commit changes of current build"
-      run: |
-        cd ./MFT
-        git config user.email "arilrad@stengg.com"
-        git config user.name "agilrad"
-        git commit -m "[auto] version updated" -a
+    # - name: "🖃 Commit changes of current build"
+    #   run: |
+    #     cd ./MFT
+    #     git config user.email "arilrad@stengg.com"
+    #     git config user.name "agilrad"
+    #     git commit -m "[auto] version updated" -a
 
-    - name: "🚀 Upload manifest"
-      uses: ad-m/github-push-action@master
-      with:
-        directory: ./MFT
-        branch: ${{ env.manifest_branch }}
-        repository: ${{ env.manifest_repo }}
-        token: ${{ secrets.PAT }}
+    # - name: "🚀 Upload manifest"
+    #   uses: ad-m/github-push-action@master
+    #   with:
+    #     directory: ./MFT
+    #     branch: ${{ env.manifest_branch }}
+    #     repository: ${{ env.manifest_repo }}
+    #     token: ${{ secrets.PAT }}
 
   # notify:
   #   name: Notify on Slack
