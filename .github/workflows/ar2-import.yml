@@ -11,9 +11,21 @@ env:
 on:
   workflow_dispatch:
 
+concurrency:
+  group: ci-ar2-import-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    name: "Execute tests"
+  test1:
+    name: "Execute test 1"
     runs-on: ubuntu-latest
     steps:
       - run: env
+
+  test2:
+    name: "Execute test 2"
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo ${{ env.image_prefix }}
+          echo ${{ env.app_name }}
