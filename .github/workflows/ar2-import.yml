@@ -19,8 +19,12 @@ jobs:
   test1:
     name: "Execute test 1"
     runs-on: ubuntu-latest
+    outputs:
+      registry: ${{ steps.step1.outputs.value1 }}
     steps:
-      - run: env
+      - id: step1
+        run: |
+          echo ${{ env.image_prefix }} >> $GITHUB_OUTPUT
 
   test2:
     name: "Execute test 2"
@@ -30,9 +34,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - image: ${{ env.image_prefix }}_1
-          - image: ${{ env.image_prefix }}_2
-          - image: ${{ env.image_prefix }}_3
+          - image: ${{ needs.test1.outputs.registry }}_1
+          - image: ${{ needs.test1.outputs.registry }}_2
+          - image: ${{ needs.test1.outputs.registry }}_3
 
     steps:
       - name: "matrix ${{ matrix.image }}"
