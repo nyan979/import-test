@@ -24,7 +24,7 @@ jobs:
     steps:
       - id: step1
         run: |
-          echo ${{ env.image_prefix }} >> $GITHUB_OUTPUT
+          echo "value1=${{ env.image_prefix }}" >> $GITHUB_OUTPUT
 
   test2:
     name: "Execute test 2"
